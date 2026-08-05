@@ -1,0 +1,122 @@
+##############################
+# .NET / MSBuild
+##############################
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]64/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+*.tlog
+*.binlog
+project.lock.json
+project.fragment.lock.json
+
+##############################
+# Visual Studio / Rider / VS Code
+##############################
+.vs/
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.userprefs
+*.DotSettings.user
+*.csproj.user
+
+##############################
+# NuGet
+##############################
+packages/
+*.nupkg
+*.snupkg
+.nuget/
+# Mantenha o lock file se você usa restore determinístico:
+# packages.lock.json
+
+##############################
+# Playwright (.NET)
+##############################
+# Script gerado pelo build (fica em bin/, mas explicitamos por segurança)
+playwright.ps1
+.playwright/
+
+# Relatórios, traces, vídeos e screenshots de execução
+playwright-report/
+playwright/.cache/
+test-results/
+TestResults/
+traces/
+*.trace.zip
+videos/
+screenshots/
+downloads/
+
+# Storage state / sessões autenticadas — NUNCA versionar (contém tokens e cookies)
+playwright/.auth/
+**/.auth/
+*.storagestate.json
+auth.json
+state.json
+
+# Browsers baixados localmente (quando PLAYWRIGHT_BROWSERS_PATH=0)
+ms-playwright/
+
+##############################
+# Testes / cobertura
+##############################
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coverlet.json
+coverage*.json
+coverage*.xml
+coverage*.info
+coverage/
+.coverlet/
+BenchmarkDotNet.Artifacts/
+
+##############################
+# Configuração local e segredos
+##############################
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+*.local.json
+secrets.json
+*.pfx
+*.p12
+*.key
+
+##############################
+# Docker / CI local
+##############################
+docker-compose.override.yml
+
+##############################
+# Sistema operacional
+##############################
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.swp
+*~
