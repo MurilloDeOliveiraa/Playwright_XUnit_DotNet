@@ -1,5 +1,6 @@
 using Microsoft.Playwright;
 using PlaywrightFramework.Fixtures;
+using PlaywrightFramework.Flows;
 using PlaywrightFramework.Pages;
 using PlaywrightFramework.TestData;
 using Xunit.Abstractions;
@@ -14,28 +15,11 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
     {
         // Arrange
         var order = new OrderBuilder().Build(); // um pedido normal, sem nenhum desvio
-
-        var loginPage = new LoginPage(Page);
-        var productsPage = new ProductsPage(Page);
-        var cartPage = new CartPage(Page);
-        var informationPage = new CheckoutInformationPage(Page);
-        var overviewPage = new CheckoutOverviewPage(Page);
+        var checkoutFlow = new CheckoutFlow(Page);
         var completePage = new CheckoutCompletePage(Page);
 
-        await loginPage.GoToAsync();
-        await loginPage.LoginAsAsync(order.User);
-        foreach (var product in order.Products)
-        {
-            await productsPage.AddToCartAsync(product);
-        }
-
-        await productsPage.GoToCartAsync();
-        await cartPage.StartCheckoutAsync();
-
-        // Act
-        await informationPage.FillInformationAsync(order.Delivery);
-        await informationPage.ContinueAsync();
-        await overviewPage.FinishAsync();
+        // Act — aqui a jornada inteira É o comportamento sob teste.
+        await checkoutFlow.PlaceOrderAsync(order);
 
         // Assert
         await Assertions.Expect(completePage.ConfirmationHeader)
@@ -45,25 +29,14 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
     [Fact]
     public async Task Checkout_SemCep_MostraErroDeValidacao()
     {
-        // Arrange — o teste declara SÓ o desvio. Nome e sobrenome não são assunto dele.
+        // Arrange — o fluxo cobre a pré-condição e para na porta.
         var order = new OrderBuilder().WithoutPostalCode().Build();
-
-        var loginPage = new LoginPage(Page);
-        var productsPage = new ProductsPage(Page);
-        var cartPage = new CartPage(Page);
+        var checkoutFlow = new CheckoutFlow(Page);
         var informationPage = new CheckoutInformationPage(Page);
 
-        await loginPage.GoToAsync();
-        await loginPage.LoginAsAsync(order.User);
-        foreach (var product in order.Products)
-        {
-            await productsPage.AddToCartAsync(product);
-        }
+        await checkoutFlow.GoToDeliveryInformationAsync(order);
 
-        await productsPage.GoToCartAsync();
-        await cartPage.StartCheckoutAsync();
-
-        // Act
+        // Act — o que está sendo testado, e só isso.
         await informationPage.FillInformationAsync(order.Delivery);
         await informationPage.ContinueAsync();
 
@@ -81,25 +54,11 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
             .WithProduct("Sauce Labs Bike Light")
             .Build();
 
-        var loginPage = new LoginPage(Page);
-        var productsPage = new ProductsPage(Page);
-        var cartPage = new CartPage(Page);
-        var informationPage = new CheckoutInformationPage(Page);
+        var checkoutFlow = new CheckoutFlow(Page);
         var overviewPage = new CheckoutOverviewPage(Page);
 
-        await loginPage.GoToAsync();
-        await loginPage.LoginAsAsync(order.User);
-        foreach (var product in order.Products)
-        {
-            await productsPage.AddToCartAsync(product);
-        }
-
-        await productsPage.GoToCartAsync();
-        await cartPage.StartCheckoutAsync();
-
         // Act
-        await informationPage.FillInformationAsync(order.Delivery);
-        await informationPage.ContinueAsync();
+        await checkoutFlow.GoToOrderSummaryAsync(order);
 
         // Assert
         await Assertions.Expect(overviewPage.ItemNames).ToHaveCountAsync(2);

@@ -17,9 +17,6 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
         var productsPage = new ProductsPage(Page);
         await loginPage.GoToAsync();
 
-        var user1 = new User("Murillo", "Lopes");
-        _testOutputHelper.WriteLine(user1.ToString()); //Como o User é um record, ele possui um método ToString() que printa as propriedades de uma forma melhor.
-
         // Act
         await loginPage.LoginAsAsync(UsersFactory.Standard());
 
