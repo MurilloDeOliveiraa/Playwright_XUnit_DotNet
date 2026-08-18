@@ -20,28 +20,22 @@ public class CartTests(BrowserFixture browserFixture, ITestOutputHelper testOutp
     public async Task AdicionarUmProduto_MostraBadgeComUm()
     {
         // Arrange — aqui o login é PRÉ-CONDIÇÃO, não o alvo: usa o fluxo.
-        var loginFlow = new LoginFlow(Page);
-        var productsPage = new ProductsPage(Page);
-        await loginFlow.SignInAsAsync(UsersFactory.Standard());
-
+        await LoginFlow.SignInAsAsync(UsersFactory.Standard());
+        
         // Act
-        await productsPage.AddToCartAsync("Sauce Labs Backpack");
+        await ProductsPage.ItemNamed("Sauce Labs Backpack").AddToCartAsync();
 
         // Assert
-        await Assertions.Expect(productsPage.CartBadge).ToHaveTextAsync("1");
+        await Assertions.Expect(ProductsPage.Header.CartBadge).ToHaveTextAsync("1");
     }
 
     [Fact]
     public async Task NovoTeste_ComecaComCarrinhoVazio()
     {
-        // Arrange
-        var loginFlow = new LoginFlow(Page);
-        var productsPage = new ProductsPage(Page);
-
-        // Act
-        await loginFlow.SignInAsAsync(UsersFactory.Standard());
+        // Arrange & Act
+        await LoginFlow.SignInAsAsync(UsersFactory.Standard());
 
         // Assert — sem badge nenhum: nada vazou do teste anterior.
-        await Assertions.Expect(productsPage.CartBadge).Not.ToBeVisibleAsync();
+        await Assertions.Expect(ProductsPage.Header.CartBadge).Not.ToBeVisibleAsync();
     }
 }

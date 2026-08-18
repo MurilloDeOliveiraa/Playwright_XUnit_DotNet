@@ -15,14 +15,12 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
     {
         // Arrange
         var order = new OrderBuilder().Build(); // um pedido normal, sem nenhum desvio
-        var checkoutFlow = new CheckoutFlow(Page);
-        var completePage = new CheckoutCompletePage(Page);
 
         // Act — aqui a jornada inteira É o comportamento sob teste.
-        await checkoutFlow.PlaceOrderAsync(order);
+        await CheckoutFlow.PlaceOrderAsync(order);
 
         // Assert
-        await Assertions.Expect(completePage.ConfirmationHeader)
+        await Assertions.Expect(CheckoutCompletePage.ConfirmationHeader)
             .ToHaveTextAsync("Thank you for your order!");
     }
 
@@ -31,18 +29,32 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
     {
         // Arrange — o fluxo cobre a pré-condição e para na porta.
         var order = new OrderBuilder().WithoutPostalCode().Build();
-        var checkoutFlow = new CheckoutFlow(Page);
-        var informationPage = new CheckoutInformationPage(Page);
-
-        await checkoutFlow.GoToDeliveryInformationAsync(order);
+        await CheckoutFlow.GoToDeliveryInformationAsync(order);
 
         // Act — o que está sendo testado, e só isso.
-        await informationPage.FillInformationAsync(order.Delivery);
-        await informationPage.ContinueAsync();
+        await CheckoutInformationPage.FillInformationAsync(order.Delivery);
+        await CheckoutInformationPage.ContinueAsync();
 
         // Assert
-        await Assertions.Expect(informationPage.ErrorMessage)
+        await Assertions.Expect(CheckoutInformationPage.ErrorMessage)
             .ToContainTextAsync("Postal Code is required");
+    }
+
+    [Fact]
+    public async Task Checkout_NaTelaDeEntrega_BadgeAindaMostraOsItens()
+    {
+        // Arrange — este teste era IMPOSSÍVEL antes do HeaderComponent: o badge morava
+        // dentro do ProductsPage, e aqui a gente está na tela de dados de entrega.
+        var order = new OrderBuilder()
+            .WithProduct("Sauce Labs Backpack")
+            .WithProduct("Sauce Labs Bike Light")
+            .Build();
+
+        // Act
+        await CheckoutFlow.GoToDeliveryInformationAsync(order);
+
+        // Assert
+        await Assertions.Expect(CheckoutInformationPage.Header.CartBadge).ToHaveTextAsync("2");
     }
 
     [Fact]
@@ -54,13 +66,10 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
             .WithProduct("Sauce Labs Bike Light")
             .Build();
 
-        var checkoutFlow = new CheckoutFlow(Page);
-        var overviewPage = new CheckoutOverviewPage(Page);
-
         // Act
-        await checkoutFlow.GoToOrderSummaryAsync(order);
+        await CheckoutFlow.GoToOrderSummaryAsync(order);
 
         // Assert
-        await Assertions.Expect(overviewPage.ItemNames).ToHaveCountAsync(2);
+        await Assertions.Expect(CheckoutOverviewPage.ItemNames).ToHaveCountAsync(2);
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using PlaywrightFramework.Components;
 
 namespace PlaywrightFramework.Pages;
 
@@ -9,12 +10,16 @@ public class CartPage
 
     private ILocator CheckoutButton => _page.Locator("[data-test='checkout']");
 
+    /// <summary>O cabeçalho compartilhado.</summary>
+    public HeaderComponent Header { get; }
+
     /// <summary>Estado exposto: os nomes dos itens no carrinho.</summary>
     public ILocator ItemNames => _page.Locator("[data-test='inventory-item-name']");
 
     public CartPage(IPage page)
     {
         _page = page;
+        Header = new HeaderComponent(page);
     }
 
     public async Task StartCheckoutAsync()

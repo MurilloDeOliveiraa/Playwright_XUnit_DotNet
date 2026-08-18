@@ -32,10 +32,10 @@ public class CheckoutFlow(IPage page)
 
         foreach (var product in order.Products)
         {
-            await _productsPage.AddToCartAsync(product);
+            await _productsPage.ItemNamed(product).AddToCartAsync();
         }
 
-        await _productsPage.GoToCartAsync();
+        await _productsPage.Header.GoToCartAsync();
         await _cartPage.StartCheckoutAsync();
     }
 

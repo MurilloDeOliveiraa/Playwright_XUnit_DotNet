@@ -1,48 +1,37 @@
 using Microsoft.Playwright;
+using PlaywrightFramework.Components;
 
 namespace PlaywrightFramework.Pages;
 
 /// <summary>
-/// POM da tela de produtos (o inventário do SauceDemo).
-/// Expõe CartBadge como estado para o teste assertar quantos itens estão no carrinho.
+/// POM da vitrine de produtos.
+///
+/// Repare no que SOBROU aqui depois dos componentes: só o que é exclusivo desta tela.
+/// O cabeçalho virou componente; o card de produto virou componente. O dropdown de
+/// ordenação ficou — ele mora dentro da faixa do cabeçalho, mas só existe nesta tela,
+/// e é justamente por isso que ele NÃO entrou no HeaderComponent.
 /// </summary>
-public class ProductsPage
+public class ProductsPage(IPage page)
 {
-    private readonly IPage _page;
+    private ILocator ItemCards => page.Locator(".inventory_item");
 
-    private ILocator Title => _page.Locator(".title");
-    private ILocator CartLink => _page.Locator("[data-test='shopping-cart-link']");
+    /// <summary>O cabeçalho compartilhado (menu, carrinho, título da tela).</summary>
+    public HeaderComponent Header { get; } = new(page);
 
-    /// <summary>Estado exposto: o "balãozinho" com a contagem do carrinho.</summary>
-    public ILocator CartBadge => _page.Locator("[data-test='shopping-cart-badge']");
-
-    /// <summary>Estado exposto: o título da tela ("Products") — prova que o login passou.</summary>
-    public ILocator Heading => Title;
-
-    public ProductsPage(IPage page)
-    {
-        _page = page;
-    }
+    /// <summary>Estado exposto: o seletor de ordenação — exclusivo desta tela.</summary>
+    public ILocator SortDropdown => page.Locator("[data-test='product-sort-container']");
 
     /// <summary>
-    /// Nome de negócio, não mecânica: o teste diz "adiciona a mochila",
-    /// não "clica no botão add-to-cart-sauce-labs-backpack".
+    /// Devolve o card de um produto pelo nome. É a fábrica de componentes desta tela:
+    /// quem chama recebe um objeto ancorado NAQUELE card e só enxerga o que há dentro dele.
     /// </summary>
-    public async Task AddToCartAsync(string productName)
+    public InventoryItemComponent ItemNamed(string productName)
     {
-        await AddToCartButtonFor(productName).ClickAsync();
-    }
-
-    public async Task GoToCartAsync()
-    {
-        await CartLink.ClickAsync();
-    }
-
-    // O SauceDemo monta o data-test a partir do nome do produto em kebab-case.
-    // Essa tradução é mecânica → fica privada aqui dentro.
-    private ILocator AddToCartButtonFor(string productName)
-    {
-        var slug = productName.Trim().ToLowerInvariant().Replace(' ', '-');
-        return _page.Locator($"[data-test='add-to-cart-{slug}']");
+        // Aqui eu estou passando qual o valor do locator root do InventoryItemComponent
+        // No caso, esse locator vai apontar pro produto com o nome que eu quero
+        return new InventoryItemComponent(ItemCards.Filter(new LocatorFilterOptions
+        {
+            HasText = productName
+        }));
     }
 }

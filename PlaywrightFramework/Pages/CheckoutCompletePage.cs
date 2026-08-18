@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using PlaywrightFramework.Components;
 
 namespace PlaywrightFramework.Pages;
 
@@ -13,12 +14,16 @@ public class CheckoutCompletePage
 
     private ILocator BackHomeButton => _page.Locator("[data-test='back-to-products']");
 
+    /// <summary>O cabeçalho compartilhado.</summary>
+    public HeaderComponent Header { get; }
+
     /// <summary>Estado exposto: a mensagem de pedido concluído.</summary>
     public ILocator ConfirmationHeader => _page.Locator("[data-test='complete-header']");
 
     public CheckoutCompletePage(IPage page)
     {
         _page = page;
+        Header = new HeaderComponent(page);
     }
 
     public async Task BackToProductsAsync()

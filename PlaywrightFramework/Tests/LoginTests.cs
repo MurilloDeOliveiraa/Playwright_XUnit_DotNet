@@ -13,29 +13,26 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
     public async Task Login_ComCredenciaisValidas_LevaParaProdutos()
     {
         // Arrange
-        var loginPage = new LoginPage(Page);
-        var productsPage = new ProductsPage(Page);
-        await loginPage.GoToAsync();
+        await LoginPage.GoToAsync();
 
         // Act
-        await loginPage.LoginAsAsync(UsersFactory.Standard());
+        await LoginPage.LoginAsAsync(UsersFactory.Standard());
 
         // Assert — web-first: espera sozinha, sem sleep.
-        await Assertions.Expect(productsPage.Heading).ToHaveTextAsync("Products");
+        await Assertions.Expect(ProductsPage.Header.Title).ToHaveTextAsync("Products");
     }
 
     [Fact]
     public async Task Login_ComSenhaErrada_MostraMensagemDeErro()
     {
         // Arrange
-        var loginPage = new LoginPage(Page);
-        await loginPage.GoToAsync();
+        await LoginPage.GoToAsync();
 
         // Act
-        await loginPage.LoginAsAsync(UsersFactory.WithWrongPassword());
+        await LoginPage.LoginAsAsync(UsersFactory.WithWrongPassword());
 
         // Assert
-        await Assertions.Expect(loginPage.ErrorMessage)
+        await Assertions.Expect(LoginPage.ErrorMessage)
             .ToContainTextAsync("Username and password do not match");
     }
 
@@ -43,14 +40,13 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
     public async Task Login_ComUsuarioBloqueado_MostraMensagemDeBloqueio()
     {
         // Arrange
-        var loginPage = new LoginPage(Page);
-        await loginPage.GoToAsync();
+        await LoginPage.GoToAsync();
 
         // Act — o teste diz "usuário bloqueado", não "a string locked_out_user".
-        await loginPage.LoginAsAsync(UsersFactory.LockedOut());
+        await LoginPage.LoginAsAsync(UsersFactory.LockedOut());
 
         // Assert
-        await Assertions.Expect(loginPage.ErrorMessage)
+        await Assertions.Expect(LoginPage.ErrorMessage)
             .ToContainTextAsync("this user has been locked out");
     }
 }

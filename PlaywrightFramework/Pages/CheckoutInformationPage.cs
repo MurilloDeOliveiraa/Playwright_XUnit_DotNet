@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using PlaywrightFramework.Components;
 using PlaywrightFramework.TestData;
 
 namespace PlaywrightFramework.Pages;
@@ -17,12 +18,16 @@ public class CheckoutInformationPage
     private ILocator PostalCodeInput => _page.Locator("[data-test='postalCode']");
     private ILocator ContinueButton => _page.Locator("[data-test='continue']");
 
+    /// <summary>O cabeçalho compartilhado.</summary>
+    public HeaderComponent Header { get; }
+
     /// <summary>Estado exposto: erro de validação dos dados de entrega.</summary>
     public ILocator ErrorMessage => _page.Locator("[data-test='error']");
 
     public CheckoutInformationPage(IPage page)
     {
         _page = page;
+        Header = new HeaderComponent(page);
     }
 
     /// <summary>
