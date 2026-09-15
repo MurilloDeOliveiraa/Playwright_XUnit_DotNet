@@ -43,7 +43,7 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
     {
         _context = await browserFixture.Browser.NewContextAsync(new BrowserNewContextOptions
         {
-            BaseURL = "https://www.saucedemo.com"
+            BaseURL = browserFixture.Settings.BaseUrl
         });
 
         Page = await _context.NewPageAsync();
