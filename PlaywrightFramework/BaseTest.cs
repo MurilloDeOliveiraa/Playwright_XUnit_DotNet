@@ -22,15 +22,22 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
 
     protected ITestOutputHelper TestOutputHelper { get; } = testOutputHelper;
 
-    protected LoginPage LoginPage = null!;
-    protected ProductsPage ProductsPage = null!;
-    protected CartPage CartPage = null!;
-    protected CheckoutCompletePage CheckoutCompletePage = null!;
-    protected CheckoutInformationPage CheckoutInformationPage = null!;
-    protected CheckoutOverviewPage CheckoutOverviewPage = null!;
+    // O catálogo de objetos do app, pronto para o teste usar.
+    //
+    // Por que '=>' e não campo atribuído no InitializeAsync: a Page só nasce lá dentro, e
+    // '=>' adia a construção para a hora do uso — o problema do "Page ainda não existe"
+    // resolve sozinho. De quebra, cada propriedade devolve uma instância nova, e isso é
+    // seguro justamente porque Page Object e Component NÃO guardam estado: um ILocator é a
+    // descrição de como achar um elemento, não o elemento. Duas instâncias são idênticas.
+    protected LoginPage LoginPage => new(Page);
+    protected ProductsPage ProductsPage => new(Page);
+    protected CartPage CartPage => new(Page);
+    protected CheckoutInformationPage CheckoutInformationPage => new(Page);
+    protected CheckoutOverviewPage CheckoutOverviewPage => new(Page);
+    protected CheckoutCompletePage CheckoutCompletePage => new(Page);
 
-    protected LoginFlow LoginFlow = null!;
-    protected CheckoutFlow CheckoutFlow = null!;
+    protected LoginFlow LoginFlow => new(Page);
+    protected CheckoutFlow CheckoutFlow => new(Page);
 
     public async Task InitializeAsync()
     {
@@ -40,15 +47,6 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
         });
 
         Page = await _context.NewPageAsync();
-        LoginPage = new LoginPage(Page);
-        ProductsPage = new ProductsPage(Page);
-        CartPage = new CartPage(Page);
-        CheckoutCompletePage = new CheckoutCompletePage(Page);
-        CheckoutInformationPage = new CheckoutInformationPage(Page);
-        CheckoutOverviewPage = new CheckoutOverviewPage(Page);
-        
-        LoginFlow =  new LoginFlow(Page);
-        CheckoutFlow = new CheckoutFlow(Page);
     }
 
     public async Task DisposeAsync()
