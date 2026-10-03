@@ -62,7 +62,9 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 ### Flow (camada de fluxos de negócio)
 - Cobre o **Arrange**, nunca o **Act**.
 - Paradas **nomeadas**, nunca parâmetro que muda o comportamento (`ateOPasso: 2` é proibido).
-- Não faz Assert · não tem `if` (um `if` quase sempre significa dois fluxos).
+- **Não dá veredito** sobre o comportamento testado · não tem `if` (um `if` quase sempre significa dois fluxos).
+- **Garante a própria pós-condição** com `Assertions.Expect` (não `WaitForAsync`): se o fluxo falha, o problema é "não montei o cenário", não "o sistema tem defeito". Ex.: `LoginFlow` confere que chegou em `Products`. *(Refina a regra antiga "fluxo não faz Assert", que estava larga demais.)*
+- `CheckoutFlow` ainda **não** confere as pós-condições das paradas — dívida adiada, gatilho: verificação negativa logo depois de uma parada do checkout.
 - Não criar fluxo para uma única chamada de POM.
 - **Nunca teste um componente através da abstração que existe para escondê-lo** — por isso `LoginTests` usa `LoginPage` direto, e não `LoginFlow`.
 
@@ -91,12 +93,19 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 ### Testes e asserções
 - **AAA**, um comportamento por teste, sem encanamento.
 - Seletores: preferir `data-test`. *(Aprofundar na fase Confiabilidade.)*
-- Asserções **web-first**: `Assertions.Expect(locator).ToHaveTextAsync(...)` — esperam sozinhas, sem `sleep`.
+- Asserções **web-first**: `Assertions.Expect(locator).ToHaveTextAsync(...)` — esperam sozinhas, sem `sleep`. **Nunca** `Task.Delay`/`Thread.Sleep`, nunca ler o valor e comparar (`TextContentAsync` + `Assert.Equal`).
+- Esperam uma **condição**, não um tempo: ações até 30 s, verificações até 5 s (padrões do Playwright).
+- **Verificação negativa (`Not.ToBeVisibleAsync`) precisa de uma positiva antes**, que prove que está na tela certa — senão passa por motivo errado (a tela pode nem ter carregado). Âncora = o **título** da tela, não o cabeçalho.
+- Antes de aumentar um timeout, descobrir se o elemento **nunca** aparece (defeito, o limite maior não ajuda) ou aparece tarde (lentidão real, aí sim).
 - Regra do async: **`await` sempre, `.Result`/`.Wait()` nunca.**
 
 ### Um princípio que já apareceu três vezes
 **Modele a realidade no tipo e deixe o compilador ser o primeiro revisor.**
 3 classes de checkout (e não 1) · fluxo com pós-condição honesta · `loginPage.Header` que não compila.
+
+### Um segundo princípio, também recorrente
+**Um erro que aparece é melhor que um sucesso que mente.** O teste que fica verde sem provar nada é o pior defeito de uma suíte.
+`storageState` mudo (10) · `firefx` caindo no Chromium (12) · negativa passando com o login falhando (13).
 
 ---
 
@@ -125,7 +134,7 @@ PlaywrightFramework/
     CheckoutOverviewPage.cs       # passo 2 — resumo
     CheckoutCompletePage.cs       # passo 3 — confirmação
   Flows/
-    LoginFlow.cs                  # jornada "entrar no sistema"
+    LoginFlow.cs                  # jornada "entrar no sistema" — confere que chegou em Products
     CheckoutFlow.cs               # jornada de compra em 3 paradas nomeadas
   TestData/
     User.cs · UsersFactory.cs     # Factory
@@ -165,8 +174,9 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 9 | DI e composição | *composition root*; duas instâncias de POM não são problema — a invariante é **POM sem estado** |
 | 11 | Config por ambiente + secrets | quanto mais específica e passageira a fonte, mais alto ela ganha; quem lê a config não sabe de onde ela veio |
 | 12 | Múltiplos browsers | uma execução por navegador (respeita a regra-mãe); padrão é para a ausência de escolha, não para disfarçar erro |
+| 13 | Auto-waiting e web-first assertions | espera **condição**, não tempo; verificação negativa precisa de positiva antes; fluxo garante a própria pós-condição |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -175,14 +185,15 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
-**PRÓXIMO PASSO → 13. Auto-waiting e web-first assertions** (início da fase Confiabilidade).
-O código já usa as duas coisas desde o começo sem ter explicado por quê. O que falta mostrar é o que acontece **sem** elas — a dor é essa. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+**PRÓXIMO PASSO → 14. Combate à flakiness** (continua a fase Confiabilidade).
+O teste que falha uma vez a cada dez. O tópico 13 já mostrou **uma** causa (verde mentiroso, verificação negativa sem âncora); a pergunta agora é como **caçar** as outras. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
-- perfis de ambiente (`appsettings.Homologacao.json`), parte "ambientes" do tópico 12 — precisa de um segundo ambiente real.
+- perfis de ambiente (`appsettings.Homologacao.json`), parte "ambientes" do tópico 12 — precisa de um segundo ambiente real;
+- pós-condição das paradas do `CheckoutFlow` — gatilho na seção Flow acima.
 
-**A fazer:** Confiabilidade (auto-waiting, web-first assertions, combate à flakiness, estratégia de seletores) · Observabilidade (logs, trace viewer, report — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Confiabilidade (combate à flakiness, estratégia de seletores) · Observabilidade (logs, trace viewer, report — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 
