@@ -14,6 +14,13 @@ public record TestSettings
     /// <summary>Endereço do site sob teste.</summary>
     public string BaseUrl { get; init; } = "https://www.saucedemo.com";
 
+    /// <summary>
+    /// Qual navegador usar. O padrão (Chromium) vale para quando NINGUÉM informou nada.
+    /// Se informaram um valor que não existe ("firefx"), a leitura falha — o padrão é para
+    /// a ausência de escolha, não para disfarçar um erro de digitação.
+    /// </summary>
+    public BrowserKind Browser { get; init; } = BrowserKind.Chromium;
+
     /// <summary>false abre o navegador na tela — útil para acompanhar uma investigação.</summary>
     public bool Headless { get; init; } = true;
 
