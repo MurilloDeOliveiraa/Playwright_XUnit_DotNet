@@ -24,6 +24,17 @@ public record TestSettings
     /// <summary>false abre o navegador na tela — útil para acompanhar uma investigação.</summary>
     public bool Headless { get; init; } = true;
 
+    /// <summary>
+    /// MODO DE ESTRESSE: quantas vezes mais devagar o navegador trabalha. 1 = desligado (padrão).
+    /// Serve para CAÇAR teste frágil: um teste com falha de tempo passa quando a página é rápida
+    /// e falha quando é lenta — então deixamos o SISTEMA lento de propósito, para alargar a janela
+    /// do azar. Só funciona no Chromium (depende de um recurso que Firefox e WebKit não têm).
+    ///
+    /// Não confundir com SlowMoMilliseconds: aquele atrasa o TESTE, o que dá tempo para a página
+    /// alcançar e ESCONDE as corridas de tempo em vez de expô-las.
+    /// </summary>
+    public double CpuThrottle { get; init; } = 1;
+
     /// <summary>Atraso proposital entre as ações, em milissegundos, para dar tempo de ver.</summary>
     public int SlowMoMilliseconds { get; init; }
 

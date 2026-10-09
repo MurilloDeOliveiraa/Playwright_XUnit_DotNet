@@ -1,4 +1,5 @@
 using Microsoft.Playwright;
+using PlaywrightFramework.Configuration;
 using PlaywrightFramework.Fixtures;
 using PlaywrightFramework.Flows;
 using PlaywrightFramework.Pages;
@@ -47,6 +48,29 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
         });
 
         Page = await _context.NewPageAsync();
+
+        await ApplyStressModeAsync();
+    }
+
+    // Modo de estresse (ver TestSettings.CpuThrottle). Desligado por padrão.
+    private async Task ApplyStressModeAsync()
+    {
+        var rate = browserFixture.Settings.CpuThrottle;
+        if (rate <= 1)
+        {
+            return;
+        }
+
+        // Pedir estresse num navegador que não sabe aplicá-lo e rodar "normal" mesmo assim seria
+        // um sucesso que mente: a pessoa acharia que estressou e não estressou.
+        if (browserFixture.Settings.Browser != BrowserKind.Chromium)
+        {
+            throw new InvalidOperationException(
+                $"CpuThrottle={rate} só funciona no Chromium, mas o navegador é {browserFixture.Settings.Browser}.");
+        }
+
+        var session = await _context.NewCDPSessionAsync(Page);
+        await session.SendAsync("Emulation.setCPUThrottlingRate", new Dictionary<string, object> { ["rate"] = rate });
     }
 
     public async Task DisposeAsync()
