@@ -2,7 +2,6 @@ using Microsoft.Playwright;
 using PlaywrightFramework.Fixtures;
 using PlaywrightFramework.Pages;
 using PlaywrightFramework.TestData;
-using Xunit.Abstractions;
 
 namespace PlaywrightFramework.Tests;
 

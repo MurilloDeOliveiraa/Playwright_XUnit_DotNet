@@ -1,5 +1,6 @@
 using Microsoft.Playwright;
 using PlaywrightFramework.Configuration;
+using PlaywrightFramework.Evidence;
 
 namespace PlaywrightFramework.Fixtures;
 
@@ -17,9 +18,18 @@ public class BrowserFixture : IAsyncLifetime
     public IBrowser Browser { get; private set; } = null!;
     public TestSettings Settings { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    /// <summary>
+    /// Identifica ESTA execução (data e hora, até o segundo). Tirado uma vez só, junto com o browser:
+    /// todas as falhas da mesma rodada caem na mesma pasta de evidência.
+    /// </summary>
+    public string RunId { get; private set; } = null!;
+
+    public async ValueTask InitializeAsync()
     {
         Settings = TestSettings.Load();
+        RunId = DateTime.Now.ToString(FailureEvidence.RunIdFormat);
+
+        FailureEvidence.DeleteOldRuns(Settings);
 
         PlaywrightDriver = await Playwright.CreateAsync();
 
@@ -40,7 +50,7 @@ public class BrowserFixture : IAsyncLifetime
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Navegador sem suporte no BrowserFixture.")
     };
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // Se a subida falhou (ex.: nome de navegador inválido), nada foi criado — e fechar o que
         // não existe geraria um segundo erro que esconde o verdadeiro.

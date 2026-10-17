@@ -1,9 +1,9 @@
 using Microsoft.Playwright;
 using PlaywrightFramework.Configuration;
+using PlaywrightFramework.Evidence;
 using PlaywrightFramework.Fixtures;
 using PlaywrightFramework.Flows;
 using PlaywrightFramework.Pages;
-using Xunit.Abstractions;
 
 namespace PlaywrightFramework;
 
@@ -18,6 +18,7 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
     : IAsyncLifetime
 {
     private IBrowserContext _context = null!;
+    private FailureEvidence _evidence = null!;
 
     protected IPage Page { get; private set; } = null!;
 
@@ -40,11 +41,17 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
     protected LoginFlow LoginFlow => new(Page);
     protected CheckoutFlow CheckoutFlow => new(Page);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
+        _evidence = new FailureEvidence(
+            browserFixture.Settings,
+            browserFixture.RunId,
+            TestContext.Current.Test!.TestDisplayName);
+
         _context = await browserFixture.Browser.NewContextAsync(new BrowserNewContextOptions
         {
-            BaseURL = browserFixture.Settings.BaseUrl
+            BaseURL = browserFixture.Settings.BaseUrl,
+            RecordVideoDir = _evidence.PrepareVideoDirectory()
         });
 
         Page = await _context.NewPageAsync();
@@ -73,9 +80,26 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
         await session.SendAsync("Emulation.setCPUThrottlingRate", new Dictionary<string, object> { ["rate"] = rate });
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        // Fechar o context descarta todo o estado do teste. Nada vaza para o próximo.
+        // O xUnit v3 entrega o resultado do teste aqui. (Na v2 isso não existia, e foi o motivo da migração.)
+        var testFailed = TestContext.Current.TestState!.Result == TestResult.Failed;
+
+        // O screenshot tem que vir ANTES de fechar o context: depois não há mais tela para fotografar.
+        if (testFailed)
+        {
+            var screenshot = await _evidence.TryTakeScreenshotAsync(Page);
+            TestOutputHelper.WriteLine($"Screenshot da falha: {screenshot ?? "não foi possível tirar"}");
+        }
+
+        // Fechar o context descarta o estado inteiro do teste (nada vaza para o próximo)
+        // e termina de gravar o vídeo.
         await _context.CloseAsync();
+
+        var video = await _evidence.FinishVideoAsync(Page, testFailed);
+        if (video is not null)
+        {
+            TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
+        }
     }
 }

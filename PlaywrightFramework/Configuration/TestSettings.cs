@@ -35,6 +35,18 @@ public record TestSettings
     /// </summary>
     public double CpuThrottle { get; init; } = 1;
 
+    /// <summary>
+    /// Onde ficam screenshot e vídeo dos testes que falharam. Relativo à pasta onde os testes
+    /// rodam. A pasta está no .gitignore: evidência pode mostrar dados da tela, e não vai ao repositório.
+    /// </summary>
+    public string EvidenceDirectory { get; init; } = "test-results";
+
+    /// <summary>
+    /// Execuções com evidência mais velhas que isso (em dias) são apagadas quando a suíte sobe, para
+    /// a pasta não crescer para sempre. 0 = nunca apagar.
+    /// </summary>
+    public int EvidenceRetentionDays { get; init; } = 7;
+
     /// <summary>Atraso proposital entre as ações, em milissegundos, para dar tempo de ver.</summary>
     public int SlowMoMilliseconds { get; init; }
 

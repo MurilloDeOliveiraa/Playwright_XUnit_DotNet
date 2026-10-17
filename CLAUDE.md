@@ -29,7 +29,7 @@ A nota do vault e o roadmap só são atualizados **depois** que o aluno valida o
 
 ## 2. Stack e convenções (SIGA em todo código novo)
 
-**.NET 8** · **xUnit** · **Microsoft.Playwright** · site de treino **SauceDemo** (`standard_user` / `secret_sauce` — credenciais públicas de site de treino).
+**.NET 8** · **xUnit v3** · **Microsoft.Playwright** · site de treino **SauceDemo** (`standard_user` / `secret_sauce` — credenciais públicas de site de treino).
 
 ### Camadas e dependências
 
@@ -90,9 +90,31 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 - `switch` sobre `BrowserKind` **sem ramo padrão** (o `_ => throw` é de propósito).
 - `DisposeAsync` do fixture só fecha o que foi criado — senão uma falha na subida gera um segundo erro que esconde o verdadeiro.
 
+### Estabilidade (flakiness)
+- **Nenhuma repetição automática de teste.** Se um dia entrar, tem que ser **contada e visível** (passou na 3ª = falhou 2 vezes).
+- **Modo de estresse:** `SAUCEDEMO_CpuThrottle=4` (depois `6`) deixa o *sistema* lento — só Chromium; em outro navegador a execução **para** com mensagem. Desligado por padrão (`1`).
+- **`SlowMo` não serve para caçar flakiness:** atrasa o teste e *esconde* as corridas de tempo.
+- 0 falhas em *n* rodadas só garante falha menor que ~3/*n*. Nunca dá para provar zero.
+- Olhar **variação do tempo**, não só a média; medir pelo **efeito** (falhas), não por instrumento dentro da página lenta.
+
+### Observabilidade (evidência na falha)
+- **xUnit v3** (migrado no tópico 16): o `DisposeAsync` lê `TestContext.Current.TestState!.Result == TestResult.Failed`. `IAsyncLifetime` usa `ValueTask`; `ITestOutputHelper` não precisa de `using Xunit.Abstractions`.
+- **`global.json` na raiz é obrigatório:** o SDK .NET 10 só roda xUnit v3 pelo modo novo do `dotnet test`. Não apagar. O pipeline precisa do mesmo.
+- **Screenshot e vídeo só quando o teste falha.** Screenshot tirado na hora; vídeo gravado em todos e **apagado** nos que passam (não dá para filmar o que já passou).
+- **Screenshot ANTES de fechar o context; vídeo DEPOIS** (é no fechamento que ele termina de gravar).
+- Tirar evidência **nunca pode esconder a falha do teste**: `TryTakeScreenshotAsync` engole a falha do próprio screenshot.
+- Pasta: `test-results/<execução>/<navegador>/<teste>/`, onde a execução é o `RunId` (`yyyyMMdd-HHmmss`, tirado 1x no `BrowserFixture`). **Teste verde nunca apaga evidência de outra execução** — `PrepareVideoDirectory` não apaga nada. Hora por teste (e até o minuto) foi tentada e falha: colide.
+- **Retenção:** ao subir o `BrowserFixture`, `DeleteOldRuns` apaga execuções com mais de `EvidenceRetentionDays` (padrão 7; `0` = nunca). Idade vem do **nome** da pasta; pasta sem o formato é **ignorada**; falha ao apagar **não derruba** a suíte (é manutenção, não veredito).
+- `RunIdFormat` é uma constante única: serve para criar e para ler o nome.
+- **Logs de passos adiados** (aluno escolheu só screenshot e vídeo). Trace → tópico 17.
+- `DeleteEmptyParents` é seguro só porque os testes rodam um de cada vez: com paralelismo o `Delete` precisa tolerar `IOException`.
+
 ### Testes e asserções
 - **AAA**, um comportamento por teste, sem encanamento.
-- Seletores: preferir `data-test`. *(Aprofundar na fase Confiabilidade.)*
+- **Escada de seletores:** `data-test` > papel + nome acessível (`GetByRole`) > texto/label > CSS (último recurso).
+- **Nunca posição** (`nth-child`): layout muda mais que texto, e o texto ainda tem controle (`Locale` no context).
+- Locator sem `data-test` entra **curto, com comentário e como dívida** ("pedir `data-test` ao time"). Mudar o locator conserta o sintoma; pedir o `data-test` muda a causa.
+- `GetByTestId` + `SetTestIdAttribute("data-test")` foi **adiado de propósito** (hoje `"[data-test='...']"` aparece 27x). Gatilho: o atributo mudar de nome.
 - Asserções **web-first**: `Assertions.Expect(locator).ToHaveTextAsync(...)` — esperam sozinhas, sem `sleep`. **Nunca** `Task.Delay`/`Thread.Sleep`, nunca ler o valor e comparar (`TextContentAsync` + `Assert.Equal`).
 - Esperam uma **condição**, não um tempo: ações até 30 s, verificações até 5 s (padrões do Playwright).
 - **Verificação negativa (`Not.ToBeVisibleAsync`) precisa de uma positiva antes**, que prove que está na tela certa — senão passa por motivo errado (a tela pode nem ter carregado). Âncora = o **título** da tela, não o cabeçalho.
@@ -113,16 +135,19 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 
 ```
 WebAutomationFramework.sln
+global.json                       # modo novo do 'dotnet test' (xUnit v3 no SDK .NET 10) — obrigatório
 PlaywrightFramework/
-  PlaywrightFramework.csproj      # net8.0, xUnit + Microsoft.Playwright
+  PlaywrightFramework.csproj      # net8.0, xUnit v3 (OutputType Exe) + Microsoft.Playwright
   appsettings.json                # endereço, headless, slow-mo — sem segredo
-  BaseTest.cs                     # context+page novos por teste + composition root
+  BaseTest.cs                     # context+page novos por teste + composition root + estresse + evidência na falha
   Configuration/
-    TestSettings.cs               # tipo + pilha de fontes (arquivo < secrets < env var)
+    TestSettings.cs               # tipo + pilha de fontes + CpuThrottle + EvidenceDirectory/RetentionDays
     BrowserKind.cs                # lista fechada: Chromium, Firefox, Webkit
   Fixtures/
-    BrowserFixture.cs             # browser 1x para a suíte + lê a config 1x + escolhe o navegador
+    BrowserFixture.cs             # browser 1x para a suíte + config 1x + navegador + RunId + retenção
     PlaywrightCollection.cs       # ICollectionFixture — a cola do xUnit
+  Evidence/
+    FailureEvidence.cs            # screenshot + vídeo só na falha; pasta por execução; retenção
   Components/
     HeaderComponent.cs            # menu, carrinho, badge, título — 1x por tela
     InventoryItemComponent.cs     # card de produto — repete 6x, recebe a raiz
@@ -147,7 +172,7 @@ PlaywrightFramework/
 
 **9 testes verdes** contra o SauceDemo, nos três navegadores.
 
-Rodar: `dotnet build` → `dotnet test`. Outro navegador: `SAUCEDEMO_Browser=firefox dotnet test`.
+Rodar: `dotnet build` → `dotnet test` (precisa do `global.json`). Outro navegador: `SAUCEDEMO_Browser=firefox dotnet test`. Filtrar um teste: `dotnet test --filter-method "*NomeDoTeste*"`. Evidência das falhas: `bin/Debug/net8.0/test-results/`.
 
 **Instalar o browser nesta máquina**: o comando oficial (`pwsh bin/Debug/net8.0/playwright.ps1 install`) **falha aqui** — o PowerShell está em *Constrained Language Mode* e o script não carrega o assembly. Contornar chamando o CLI do Playwright pelo Node que vem no próprio pacote:
 
@@ -175,8 +200,11 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 11 | Config por ambiente + secrets | quanto mais específica e passageira a fonte, mais alto ela ganha; quem lê a config não sabe de onde ela veio |
 | 12 | Múltiplos browsers | uma execução por navegador (respeita a regra-mãe); padrão é para a ausência de escolha, não para disfarçar erro |
 | 13 | Auto-waiting e web-first assertions | espera **condição**, não tempo; verificação negativa precisa de positiva antes; fluxo garante a própria pós-condição |
+| 14 | Combate à flakiness | alargar a janela do azar (estresse no *sistema*); repetição só se contada; 0 falhas em *n* rodadas ≈ falha < 3/*n* |
+| 15 | Estratégia de seletores | escada `data-test` > papel > texto > CSS; estrutura é o mais frágil; **sem código novo, de propósito** (decisão consciente) |
+| 16 | Screenshot e vídeo na falha | evidência só na falha; migração para xUnit v3 para ler o resultado do teste; pasta por execução (verde nunca apaga vermelho); retenção de 7 dias |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -185,15 +213,17 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
-**PRÓXIMO PASSO → 14. Combate à flakiness** (continua a fase Confiabilidade).
-O teste que falha uma vez a cada dez. O tópico 13 já mostrou **uma** causa (verde mentiroso, verificação negativa sem âncora); a pergunta agora é como **caçar** as outras. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+**PRÓXIMO PASSO → 17. Trace Viewer** (segundo da fase Observabilidade).
+A dor a mostrar: screenshot e vídeo mostram *como a tela estava* e *como chegou até ali*, mas nenhum mostra o DOM, a rede e cada passo. O trace guarda isso. Pontos para o aluno decidir: gravar em todos e guardar só na falha (como o vídeo)? Onde ele entra na pasta de evidência e na retenção? Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
 - perfis de ambiente (`appsettings.Homologacao.json`), parte "ambientes" do tópico 12 — precisa de um segundo ambiente real;
-- pós-condição das paradas do `CheckoutFlow` — gatilho na seção Flow acima.
+- pós-condição das paradas do `CheckoutFlow` — gatilho na seção Flow acima;
+- `GetByTestId` / `SetTestIdAttribute` — gatilho na seção Testes e asserções;
+- logs de passos — gatilho: falha que screenshot, vídeo e trace não expliquem.
 
-**A fazer:** Confiabilidade (combate à flakiness, estratégia de seletores) · Observabilidade (logs, trace viewer, report — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Observabilidade (trace viewer, report — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 
@@ -211,8 +241,6 @@ Ao fechar um tópico (depois da validação do aluno): criar/atualizar a nota, a
 
 ## 7. Prévias já plantadas no código (não são o foco ainda)
 
-- `data-test` selectors → **estratégia de seletores** (fase Confiabilidade).
-- `Expect(...).ToHaveTextAsync/ToBeVisibleAsync` → **web-first assertions** (fase Confiabilidade).
 - Tudo numa única coleção serializa os testes → **paralelismo** (fase Escala).
 - `storageState` para reaproveitar login → otimização futura. ⚠️ No dia em que entrar no `LoginFlow`, o `LoginTests` **não pode** passar a usar o fluxo — ele deixaria de exercitar a tela de login e continuaria verde.
 - `BaseTest` acumula ciclo de vida **e** fábrica de objetos → revisitar se passar de ~15 propriedades (extrair um composition root próprio).

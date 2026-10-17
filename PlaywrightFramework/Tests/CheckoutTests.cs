@@ -3,7 +3,6 @@ using PlaywrightFramework.Fixtures;
 using PlaywrightFramework.Flows;
 using PlaywrightFramework.Pages;
 using PlaywrightFramework.TestData;
-using Xunit.Abstractions;
 
 namespace PlaywrightFramework.Tests;
 
