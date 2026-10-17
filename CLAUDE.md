@@ -231,6 +231,8 @@ A dor a mostrar: screenshot e vídeo mostram *como a tela estava* e *como chegou
 
 `C:\ObsidianVaults\Murillo's Vault\QA-SET\Projetos Pessoais\Web Automation Framework`
 
+**Toda nota desta pasta leva a tag `webAutomationFramework`** (primeira da lista `tags:` do frontmatter), inclusive o índice e o roadmap. Nota nova já nasce com ela.
+
 Uma nota por tópico (`NN - Título.md`), mesmo estilo: **dor → conceito → código → finezas de sênior → tradeoff honesto → "No projeto"**. Mais o índice (`00 - Índice`) e o `Roadmap`.
 
 Ao fechar um tópico (depois da validação do aluno): criar/atualizar a nota, adicionar o link no índice, e atualizar no roadmap o diagrama, a tabela de ordem, o "Você está aqui", a árvore de arquivos e as dívidas.
