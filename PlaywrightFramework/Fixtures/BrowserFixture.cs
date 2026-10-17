@@ -28,8 +28,8 @@ public class BrowserFixture : IAsyncLifetime
     {
         Settings = TestSettings.Load();
         RunId = DateTime.Now.ToString(FailureEvidence.RunIdFormat);
-
         FailureEvidence.DeleteOldRuns(Settings);
+        Assertions.SetDefaultExpectTimeout(Settings.ExpectTimeout);
 
         PlaywrightDriver = await Playwright.CreateAsync();
 

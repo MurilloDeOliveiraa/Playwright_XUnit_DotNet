@@ -100,14 +100,21 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 ### Observabilidade (evidência na falha)
 - **xUnit v3** (migrado no tópico 16): o `DisposeAsync` lê `TestContext.Current.TestState!.Result == TestResult.Failed`. `IAsyncLifetime` usa `ValueTask`; `ITestOutputHelper` não precisa de `using Xunit.Abstractions`.
 - **`global.json` na raiz é obrigatório:** o SDK .NET 10 só roda xUnit v3 pelo modo novo do `dotnet test`. Não apagar. O pipeline precisa do mesmo.
-- **Screenshot e vídeo só quando o teste falha.** Screenshot tirado na hora; vídeo gravado em todos e **apagado** nos que passam (não dá para filmar o que já passou).
-- **Screenshot ANTES de fechar o context; vídeo DEPOIS** (é no fechamento que ele termina de gravar).
+- **Screenshot é sempre ligado e só na falha**, tirado na hora. **Trace e vídeo são opcionais** (configuração): não dá para gravar o que já passou, então são gravados durante o teste e descartados no fim, se não for para guardar.
+- **Trace:** `TraceMode` = `Off` · `OnFailure` · `Always` (lista fechada; o padrão, no código **e** no `appsettings.json`, é `OnFailure`; para desligar: `SAUCEDEMO_Trace=Off`). Para investigar **um** teste: `SAUCEDEMO_Trace=Always dotnet test --filter-method "*Nome*"`. O projeto **não repete teste**, então o modo "gravar na 2ª tentativa" do Playwright não existe aqui.
+- **Vídeo:** `RecordVideo` (padrão `false`); o trace já tem uma imagem de cada passo. Continua útil para mostrar a falha a quem não é técnico.
+- **Ordem no `DisposeAsync`:** screenshot → **parar o trace** → fechar o context → fechar o vídeo. Fechar o context é o ponto sem volta. Parar o trace **sem caminho descarta**; com caminho salva o `.zip`.
+- **Preferir o NOME do enum no `appsettings.json`** (`"Trace": "OnFailure"`). Número aceita valor fora da lista em silêncio (`7` passa); nome com erro de digitação para a execução.
+- **Abrir o trace só pelo visualizador local** (`show-trace`, pelo mesmo `node.exe` do install de navegadores). Nunca pelo site de traces do Playwright: o trace guarda tudo o que foi digitado e as respostas da rede, e não deve sair da máquina.
 - Tirar evidência **nunca pode esconder a falha do teste**: `TryTakeScreenshotAsync` engole a falha do próprio screenshot.
-- Pasta: `test-results/<execução>/<navegador>/<teste>/`, onde a execução é o `RunId` (`yyyyMMdd-HHmmss`, tirado 1x no `BrowserFixture`). **Teste verde nunca apaga evidência de outra execução** — `PrepareVideoDirectory` não apaga nada. Hora por teste (e até o minuto) foi tentada e falha: colide.
+- Pasta: `test-results/<execução>/<navegador>/<teste>/`, onde a execução é o `RunId` (`yyyyMMdd-HHmmss`, tirado 1x no `BrowserFixture`). **Teste verde nunca apaga evidência de outra execução** — `EnsureDirectory` não apaga nada. Hora por teste (e até o minuto) foi tentada e falha: colide. **A pasta só nasce quando há o que guardar**, e só se apagam pastas **vazias** (`DeleteEmptyFolders`): apagar a pasta inteira destruiria um trace recém-salvo.
 - **Retenção:** ao subir o `BrowserFixture`, `DeleteOldRuns` apaga execuções com mais de `EvidenceRetentionDays` (padrão 7; `0` = nunca). Idade vem do **nome** da pasta; pasta sem o formato é **ignorada**; falha ao apagar **não derruba** a suíte (é manutenção, não veredito).
 - `RunIdFormat` é uma constante única: serve para criar e para ler o nome.
-- **Logs de passos adiados** (aluno escolheu só screenshot e vídeo). Trace → tópico 17.
-- `DeleteEmptyParents` é seguro só porque os testes rodam um de cada vez: com paralelismo o `Delete` precisa tolerar `IOException`.
+- **Logs de passos adiados** (aluno escolheu screenshot, vídeo e trace). Gatilho: falha que nenhum dos três explique.
+- `DeleteEmptyFolders` é seguro só porque os testes rodam um de cada vez: com paralelismo o `Delete` precisa tolerar `IOException`.
+- **Custo medido do trace** (9 testes, 3 rodadas): ~5% de tempo e ~0,9 MB por teste com `Always`. Suíte pequena, site simples: **medir de novo** na suíte de verdade antes de generalizar.
+- **Dois limites, dois lugares:** `Timeout` (30 s) é o `SetDefaultTimeout` do **context** e vale para **ações**, no `BaseTest`; `ExpectTimeout` (5 s) é o `Assertions.SetDefaultExpectTimeout`, **estático**, definido **uma vez** no `BrowserFixture`. Uma verificação só: `new() { Timeout = ... }` na chamada.
+- **Todas as settings estão no `appsettings.json`**, com os mesmos valores padrão de `TestSettings` (decisão do aluno: o arquivo documenta os ajustes). **O arquivo ganha do código**, então mudar só o código não tem efeito. Setting nova entra nos dois lugares.
 
 ### Testes e asserções
 - **AAA**, um comportamento por teste, sem encanamento.
@@ -116,7 +123,7 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 - Locator sem `data-test` entra **curto, com comentário e como dívida** ("pedir `data-test` ao time"). Mudar o locator conserta o sintoma; pedir o `data-test` muda a causa.
 - `GetByTestId` + `SetTestIdAttribute("data-test")` foi **adiado de propósito** (hoje `"[data-test='...']"` aparece 27x). Gatilho: o atributo mudar de nome.
 - Asserções **web-first**: `Assertions.Expect(locator).ToHaveTextAsync(...)` — esperam sozinhas, sem `sleep`. **Nunca** `Task.Delay`/`Thread.Sleep`, nunca ler o valor e comparar (`TextContentAsync` + `Assert.Equal`).
-- Esperam uma **condição**, não um tempo: ações até 30 s, verificações até 5 s (padrões do Playwright).
+- Esperam uma **condição**, não um tempo: ações até 30 s (`Timeout`), verificações até 5 s (`ExpectTimeout`) — os dois configuráveis no `appsettings.json`.
 - **Verificação negativa (`Not.ToBeVisibleAsync`) precisa de uma positiva antes**, que prove que está na tela certa — senão passa por motivo errado (a tela pode nem ter carregado). Âncora = o **título** da tela, não o cabeçalho.
 - Antes de aumentar um timeout, descobrir se o elemento **nunca** aparece (defeito, o limite maior não ajuda) ou aparece tarde (lentidão real, aí sim).
 - Regra do async: **`await` sempre, `.Result`/`.Wait()` nunca.**
@@ -138,16 +145,17 @@ WebAutomationFramework.sln
 global.json                       # modo novo do 'dotnet test' (xUnit v3 no SDK .NET 10) — obrigatório
 PlaywrightFramework/
   PlaywrightFramework.csproj      # net8.0, xUnit v3 (OutputType Exe) + Microsoft.Playwright
-  appsettings.json                # endereço, headless, slow-mo — sem segredo
+  appsettings.json                # endereço, headless, slow-mo, timeout, trace — sem segredo
   BaseTest.cs                     # context+page novos por teste + composition root + estresse + evidência na falha
   Configuration/
-    TestSettings.cs               # tipo + pilha de fontes + CpuThrottle + EvidenceDirectory/RetentionDays
+    TestSettings.cs               # tipo + pilha de fontes + CpuThrottle + Timeout + Trace/RecordVideo + Evidence*
     BrowserKind.cs                # lista fechada: Chromium, Firefox, Webkit
+    TraceMode.cs                  # lista fechada: Off, OnFailure, Always
   Fixtures/
     BrowserFixture.cs             # browser 1x para a suíte + config 1x + navegador + RunId + retenção
     PlaywrightCollection.cs       # ICollectionFixture — a cola do xUnit
   Evidence/
-    FailureEvidence.cs            # screenshot + vídeo só na falha; pasta por execução; retenção
+    FailureEvidence.cs            # screenshot na falha + trace/vídeo opcionais; pasta por execução; retenção
   Components/
     HeaderComponent.cs            # menu, carrinho, badge, título — 1x por tela
     InventoryItemComponent.cs     # card de produto — repete 6x, recebe a raiz
@@ -203,8 +211,9 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 14 | Combate à flakiness | alargar a janela do azar (estresse no *sistema*); repetição só se contada; 0 falhas em *n* rodadas ≈ falha < 3/*n* |
 | 15 | Estratégia de seletores | escada `data-test` > papel > texto > CSS; estrutura é o mais frágil; **sem código novo, de propósito** (decisão consciente) |
 | 16 | Screenshot e vídeo na falha | evidência só na falha; migração para xUnit v3 para ler o resultado do teste; pasta por execução (verde nunca apaga vermelho); retenção de 7 dias |
+| 17 | Trace Viewer | screenshot/vídeo são fotos do resultado, o trace é o processo; `TraceMode` de lista fechada (sem repetição de teste, não há "2ª tentativa"); vídeo virou opção; custo medido ~5% |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -213,8 +222,8 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
-**PRÓXIMO PASSO → 17. Trace Viewer** (segundo da fase Observabilidade).
-A dor a mostrar: screenshot e vídeo mostram *como a tela estava* e *como chegou até ali*, mas nenhum mostra o DOM, a rede e cada passo. O trace guarda isso. Pontos para o aluno decidir: gravar em todos e guardar só na falha (como o vídeo)? Onde ele entra na pasta de evidência e na retenção? Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+**PRÓXIMO PASSO → 18. Reporting** (fecha a fase Observabilidade).
+A dor a mostrar: hoje o resultado é texto no terminal. Não há histórico, a evidência está espalhada em pastas, e a saída do teste não mostra o navegador (dívida aberta desde o tópico 12). Pontos para o aluno decidir: o que um relatório precisa responder para quem não rodou o teste? Onde fica o relatório e por quanto tempo? Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
@@ -223,7 +232,7 @@ A dor a mostrar: screenshot e vídeo mostram *como a tela estava* e *como chegou
 - `GetByTestId` / `SetTestIdAttribute` — gatilho na seção Testes e asserções;
 - logs de passos — gatilho: falha que screenshot, vídeo e trace não expliquem.
 
-**A fazer:** Observabilidade (trace viewer, report — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Observabilidade (reporting — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 

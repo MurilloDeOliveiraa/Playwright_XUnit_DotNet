@@ -5,16 +5,18 @@ using PlaywrightFramework.Configuration;
 namespace PlaywrightFramework.Evidence;
 
 /// <summary>
-/// Evidência de um teste que falhou: um screenshot (o momento da falha) e um vídeo (o caminho até ela).
-/// Só fica no disco quando o teste FALHA — guardar de todos esconderia o que importa.
+/// Evidência de um teste: screenshot (o momento da falha), trace (passo a passo, opcional) e vídeo
+/// (opcional). O screenshot só fica no disco quando o teste FALHA — guardar de todos esconderia o
+/// que importa. Trace e vídeo são ligados por configuração (TestSettings.Trace e RecordVideo).
 ///
 /// Caminho: test-results / execução / navegador / nome do teste.
 ///   - a execução (data e hora) separa uma rodada da outra: um teste que passa NUNCA apaga a
 ///     evidência de uma falha anterior, e as falhas da mesma rodada ficam juntas;
-///   - o navegador no caminho responde "falhou em qual navegador?" sem precisar abrir nada.
+///   - o navegador no caminho responde "falhou em qual navegador?" sem precisar abrir nada;
+///   - a pasta do teste só nasce quando há o que guardar.
 ///
-/// O screenshot é tirado NA HORA da falha. O vídeo não pode ser: não dá para filmar o que já passou.
-/// Por isso ele é gravado em todos os testes e apagado no fim dos que passaram.
+/// O screenshot é tirado NA HORA da falha. Trace e vídeo não podem ser: não dá para gravar o que já
+/// passou. Por isso são gravados durante o teste e descartados no fim, quando não for para guardar.
 ///
 /// As execuções com falha são apagadas depois de EvidenceRetentionDays (ver DeleteOldRuns).
 /// </summary>
@@ -79,10 +81,14 @@ public class FailureEvidence
         }
     }
 
-    /// <summary>Onde o Playwright grava o vídeo. Nunca apaga nada: pasta que já existe é evidência de outro teste.</summary>
-    public string PrepareVideoDirectory()
+    /// <summary>
+    /// Cria a pasta do teste, se ainda não existir, e devolve o caminho. Só é chamada quando há o que
+    /// guardar (screenshot, trace ou vídeo). Nunca apaga nada: pasta que já existe é evidência de outro teste.
+    /// </summary>
+    public string EnsureDirectory()
     {
-        Directory.CreateDirectory(_directory);
+        if (!Directory.Exists(_directory))
+            Directory.CreateDirectory(_directory);
         return _directory;
     }
 
@@ -95,7 +101,7 @@ public class FailureEvidence
     {
         try
         {
-            var path = Path.Combine(_directory, "failure.png");
+            var path = Path.Combine(EnsureDirectory(), "failure.png");
             await page.ScreenshotAsync(new PageScreenshotOptions { Path = path, FullPage = true });
             return path;
         }
@@ -105,7 +111,27 @@ public class FailureEvidence
         }
     }
 
-    /// <summary>Chamar DEPOIS de fechar o context: é nesse momento que o vídeo termina de ser gravado.</summary>
+    /// <summary>
+    /// Para o trace. Chamar ANTES de fechar o context: depois dele não há mais o que gravar.
+    /// Parar SEM caminho descarta a gravação; com caminho, salva o .zip. Devolve o caminho, ou null se descartou.
+    /// </summary>
+    public async Task<string?> StopTraceAsync(IBrowserContext context, bool keep)
+    {
+        if (!keep)
+        {
+            await context.Tracing.StopAsync();
+            return null;
+        }
+
+        var path = Path.Combine(EnsureDirectory(), "trace.zip");
+        await context.Tracing.StopAsync(new TracingStopOptions { Path = path });
+        return path;
+    }
+
+    /// <summary>
+    /// Só chamar com RecordVideo ligado, e DEPOIS de fechar o context: é nesse momento que o vídeo
+    /// termina de ser gravado. Apaga o arquivo se o teste passou; devolve o caminho se ficou.
+    /// </summary>
     public async Task<string?> FinishVideoAsync(IPage page, bool testFailed)
     {
         var video = page.Video ?? throw new InvalidOperationException("O vídeo não foi ligado no context.");
@@ -113,23 +139,24 @@ public class FailureEvidence
         if (!testFailed)
         {
             await video.DeleteAsync();
-            Directory.Delete(_directory, recursive: true);
-            DeleteEmptyParents();
             return null;
         }
 
         return await video.PathAsync();
     }
 
-    // Sobe de pasta em pasta (navegador, depois execução) removendo as que ficaram vazias, e para
-    // na raiz. Uma rodada 100% verde não deixa casca nenhuma.
-    // Seguro hoje porque os testes rodam um de cada vez. Com paralelismo (fase Escala), conferir
-    // "está vazia?" e apagar vira uma corrida: o Delete precisará tolerar IOException.
-    private void DeleteEmptyParents()
+    /// <summary>
+    /// Chamar no fim de cada teste. Remove a pasta do teste e as de cima (navegador, execução) que
+    /// ficaram VAZIAS, e para na raiz. Uma rodada sem nada para guardar não deixa casca nenhuma, e
+    /// uma pasta com trace ou screenshot dentro nunca é tocada.
+    /// Seguro hoje porque os testes rodam um de cada vez. Com paralelismo (fase Escala), conferir
+    /// "está vazia?" e apagar vira uma corrida: o Delete precisará tolerar IOException.
+    /// </summary>
+    public void DeleteEmptyFolders()
     {
-        var directory = Path.GetDirectoryName(_directory)!;
+        var directory = _directory;
 
-        while (directory != _root && !Directory.EnumerateFileSystemEntries(directory).Any())
+        while (directory != _root && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
         {
             Directory.Delete(directory);
             directory = Path.GetDirectoryName(directory)!;

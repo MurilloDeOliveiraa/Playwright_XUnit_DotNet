@@ -51,8 +51,29 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
         _context = await browserFixture.Browser.NewContextAsync(new BrowserNewContextOptions
         {
             BaseURL = browserFixture.Settings.BaseUrl,
-            RecordVideoDir = _evidence.PrepareVideoDirectory()
+
+            // Sem vídeo ligado, nem grava (nem cria pasta): null desliga a gravação.
+            RecordVideoDir = browserFixture.Settings.RecordVideo ? _evidence.EnsureDirectory() : null
         });
+        
+        _context.SetDefaultTimeout(browserFixture.Settings.Timeout);
+        
+        // Cria a pasta se o Trace for diferente de OFF
+        if (!browserFixture.Settings.RecordVideo && browserFixture.Settings.Trace != TraceMode.Off)
+        {
+            _evidence.EnsureDirectory();
+        }
+
+        // O trace começa logo depois do context, para pegar a criação da página também.
+        if (browserFixture.Settings.Trace != TraceMode.Off)
+        {
+            await _context.Tracing.StartAsync(new TracingStartOptions
+            {
+                Screenshots = true, // uma imagem a cada passo
+                Snapshots = true,   // a cópia navegável da página em cada passo
+                Sources = true      // a linha do teste que fez cada passo
+            });
+        }
 
         Page = await _context.NewPageAsync();
 
@@ -92,14 +113,32 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
             TestOutputHelper.WriteLine($"Screenshot da falha: {screenshot ?? "não foi possível tirar"}");
         }
 
+        // O trace PARA antes de fechar o context (depois, não há mais o que gravar). Guarda se o teste
+        // falhou, ou se pediram para guardar sempre.
+        if (browserFixture.Settings.Trace != TraceMode.Off)
+        {
+            var keepTrace = testFailed || browserFixture.Settings.Trace == TraceMode.Always;
+            var trace = await _evidence.StopTraceAsync(_context, keepTrace);
+            if (trace is not null)
+            {
+                TestOutputHelper.WriteLine($"Trace: {trace}");
+            }
+        }
+
         // Fechar o context descarta o estado inteiro do teste (nada vaza para o próximo)
         // e termina de gravar o vídeo.
         await _context.CloseAsync();
 
-        var video = await _evidence.FinishVideoAsync(Page, testFailed);
-        if (video is not null)
+        if (browserFixture.Settings.RecordVideo)
         {
-            TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
+            var video = await _evidence.FinishVideoAsync(Page, testFailed);
+            if (video is not null)
+            {
+                TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
+            }
         }
+
+        // Nada para guardar? Não deixa pasta vazia para trás.
+        _evidence.DeleteEmptyFolders();
     }
 }

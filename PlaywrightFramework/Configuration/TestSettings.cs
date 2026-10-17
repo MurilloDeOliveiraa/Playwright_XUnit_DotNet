@@ -23,6 +23,14 @@ public record TestSettings
 
     /// <summary>false abre o navegador na tela — útil para acompanhar uma investigação.</summary>
     public bool Headless { get; init; } = true;
+    
+    /// <summary>
+    /// Timeout pras ações (clicar, preencher, navegar)
+    /// </summary>
+    public float Timeout { get; init; } = 30_000f;
+    
+    /// <summary>Limite das verificações (Expect), em milissegundos. Padrão do Playwright: 5000.</summary>
+    public float ExpectTimeout { get; init; } = 5_000f;
 
     /// <summary>
     /// MODO DE ESTRESSE: quantas vezes mais devagar o navegador trabalha. 1 = desligado (padrão).
@@ -36,10 +44,25 @@ public record TestSettings
     public double CpuThrottle { get; init; } = 1;
 
     /// <summary>
-    /// Onde ficam screenshot e vídeo dos testes que falharam. Relativo à pasta onde os testes
+    /// Onde ficam as evidências (screenshot, trace e vídeo) dos testes. Relativo à pasta onde os testes
     /// rodam. A pasta está no .gitignore: evidência pode mostrar dados da tela, e não vai ao repositório.
     /// </summary>
     public string EvidenceDirectory { get; init; } = "test-results";
+
+    /// <summary>
+    /// Quando gravar o trace. O padrão é OnFailure: grava em todos os testes e guarda só o dos que
+    /// falharam. Gravar custa tempo (~5% medido) e Off desliga. Para desligar numa execução:
+    /// SAUCEDEMO_Trace=Off. Para investigar um teste só, guardando mesmo se passar:
+    /// SAUCEDEMO_Trace=Always dotnet test --filter-method "*NomeDoTeste*".
+    /// </summary>
+    public TraceMode Trace { get; init; } = TraceMode.OnFailure;
+
+    /// <summary>
+    /// Gravar vídeo? Desligado por padrão: o vídeo é gravado em TODOS os testes (e apagado nos que
+    /// passam), então custa tempo mesmo quando ninguém precisa dele. O trace já guarda uma imagem
+    /// de cada passo.
+    /// </summary>
+    public bool RecordVideo { get; init; } = false;
 
     /// <summary>
     /// Execuções com evidência mais velhas que isso (em dias) são apagadas quando a suíte sobe, para
@@ -85,8 +108,9 @@ public record TestSettings
 
             .Build();
 
-        // Get<T> preenche o tipo a partir das chaves. Se o arquivo não tiver alguma delas,
-        // valem os valores padrão declarados acima nas propriedades.
+        // Get<T> preenche o tipo a partir das chaves.
+        // Se o arquivo (appsettings.json) não tiver algum valor pras propriedades,
+        // nesse caso, valem os valores padrão declarados acima nessa classe.
         return configuration.Get<TestSettings>() ?? new TestSettings();
     }
 }
