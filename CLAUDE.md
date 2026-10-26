@@ -112,6 +112,12 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 - `RunIdFormat` é uma constante única: serve para criar e para ler o nome.
 - **Logs de passos adiados** (aluno escolheu screenshot, vídeo e trace). Gatilho: falha que nenhum dos três explique.
 - `DeleteEmptyFolders` é seguro só porque os testes rodam um de cada vez: com paralelismo o `Delete` precisa tolerar `IOException`.
+- **Relatório (tópico 18):** o xUnit v3 gera sozinho: `dotnet test --report-xunit-html --report-xunit-html-filename relatorio-firefox.html` (**com** a extensão; sem ela não se sabe), rodado na **raiz do repo**; cai em `TestResults/` (gitignored). **Nenhum** dos 6 formatos traz o navegador nem anexos; o caminho da evidência só como texto na saída da falha.
+- **Todo teste escreve `Navegador: ...` na saída** (`BaseTest.InitializeAsync`). **O caminho da evidência só quando algo foi guardado**: num teste verde a pasta nem nasce, e apontar para ela seria um sucesso que mente.
+- **Um relatório por navegador, com o navegador no nome do arquivo.** O relatório **não é apagado automaticamente** (o código não sabe onde ele foi pedido e `TestResults/` não é só nosso). Dívidas: sobrevive à evidência (7 dias), tem caminhos e o usuário do Windows no nome padrão, sem histórico até o pipeline.
+- **Variável de ambiente por terminal:** PowerShell `$env:SAUCEDEMO_Browser = "Firefox"`; cmd `set SAUCEDEMO_Browser=Firefox` (**sem aspas**); Git Bash `export SAUCEDEMO_Browser=Firefox`. Vale só para a janela; não usar `setx`.
+- **Ao investigar uma falha, copiar a evidência antes de limpar qualquer pasta** (uma pasta `test-results` com o trace de uma falha inexplicada já foi apagada por engano).
+- **Falha intermitente em aberto:** `Login_ComCredenciaisValidas` já falhou uma vez com a senha de **outro** teste na página (rodada lenta, 16 s); 14 repetições não reproduziram. Hipótese a verificar, não conclusão: estado compartilhado (`static`, dados de teste).
 - **Custo medido do trace** (9 testes, 3 rodadas): ~5% de tempo e ~0,9 MB por teste com `Always`. Suíte pequena, site simples: **medir de novo** na suíte de verdade antes de generalizar.
 - **Dois limites, dois lugares:** `Timeout` (30 s) é o `SetDefaultTimeout` do **context** e vale para **ações**, no `BaseTest`; `ExpectTimeout` (5 s) é o `Assertions.SetDefaultExpectTimeout`, **estático**, definido **uma vez** no `BrowserFixture`. Uma verificação só: `new() { Timeout = ... }` na chamada.
 - **Todas as settings estão no `appsettings.json`**, com os mesmos valores padrão de `TestSettings` (decisão do aluno: o arquivo documenta os ajustes). **O arquivo ganha do código**, então mudar só o código não tem efeito. Setting nova entra nos dois lugares.
@@ -212,8 +218,9 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 15 | Estratégia de seletores | escada `data-test` > papel > texto > CSS; estrutura é o mais frágil; **sem código novo, de propósito** (decisão consciente) |
 | 16 | Screenshot e vídeo na falha | evidência só na falha; migração para xUnit v3 para ler o resultado do teste; pasta por execução (verde nunca apaga vermelho); retenção de 7 dias |
 | 17 | Trace Viewer | screenshot/vídeo são fotos do resultado, o trace é o processo; `TraceMode` de lista fechada (sem repetição de teste, não há "2ª tentativa"); vídeo virou opção; custo medido ~5% |
+| 18 | Reporting | o relatório do xUnit vem de graça, mas não traz navegador nem anexo; `Navegador:` na saída de todo teste; saída de teste verde não aponta para o que não existe; não apagar o que o código não reconhece como seu |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -222,8 +229,8 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
-**PRÓXIMO PASSO → 18. Reporting** (fecha a fase Observabilidade).
-A dor a mostrar: hoje o resultado é texto no terminal. Não há histórico, a evidência está espalhada em pastas, e a saída do teste não mostra o navegador (dívida aberta desde o tópico 12). Pontos para o aluno decidir: o que um relatório precisa responder para quem não rodou o teste? Onde fica o relatório e por quanto tempo? Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+**PRÓXIMO PASSO → 19. Paralelização** (abre a fase Escala; a de Observabilidade está completa).
+A dor a mostrar: tudo roda em uma coleção só (`[Collection]` no `BaseTest`), um teste de cada vez. Ligações já plantadas: a corrida do `DeleteEmptyFolders` (o `Delete` precisa tolerar `IOException`), o `RunId` por execução, e a **falha intermitente em aberto** (estado compartilhado entre testes). Pontos para o aluno decidir: o que precisa ser verdade para dois testes rodarem ao mesmo tempo? Quanto se ganha? **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
@@ -232,7 +239,7 @@ A dor a mostrar: hoje o resultado é texto no terminal. Não há histórico, a e
 - `GetByTestId` / `SetTestIdAttribute` — gatilho na seção Testes e asserções;
 - logs de passos — gatilho: falha que screenshot, vídeo e trace não expliquem.
 
-**A fazer:** Observabilidade (reporting — inclui mostrar o navegador na saída do teste) · Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Escala (paralelismo, CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 
