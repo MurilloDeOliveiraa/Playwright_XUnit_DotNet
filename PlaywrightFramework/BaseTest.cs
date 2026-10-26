@@ -43,6 +43,11 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
 
     public async ValueTask InitializeAsync()
     {
+        // O relatório do xUnit não sabe o navegador (o nome do teste é só classe+método), então
+        // o teste o escreve na própria saída, passando ou falhando. Só o navegador: o caminho da
+        // evidência continua sendo escrito apenas quando algo foi guardado.
+        TestOutputHelper.WriteLine($"Navegador: {browserFixture.Settings.Browser}");
+
         _evidence = new FailureEvidence(
             browserFixture.Settings,
             browserFixture.RunId,
