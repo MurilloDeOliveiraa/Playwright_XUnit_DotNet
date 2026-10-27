@@ -12,8 +12,10 @@ namespace PlaywrightFramework;
 /// Regra-mãe: UM browser por execução (vem do fixture), UM context por teste (criado aqui).
 /// Context é barato e é o que dá isolamento real: cookies, localStorage e sessão zerados
 /// a cada teste — sem nenhuma limpeza manual.
+///
+/// Sem [Collection]: cada classe de teste é a própria coleção, e o xUnit roda coleções em paralelo.
+/// O browser único chega pelo BrowserFixture, que é um fixture de ASSEMBLY (ver BrowserFixture).
 /// </summary>
-[Collection(PlaywrightCollection.Name)] //Mesma coisa que escrever a string "Playwright Collection"
 public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper testOutputHelper) //Primary Constructor, já declara e inicializa as variáveis
     : IAsyncLifetime
 {
@@ -142,8 +144,5 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
                 TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
             }
         }
-
-        // Nada para guardar? Não deixa pasta vazia para trás.
-        _evidence.DeleteEmptyFolders();
     }
 }

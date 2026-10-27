@@ -1,6 +1,18 @@
 using Microsoft.Playwright;
 using PlaywrightFramework.Configuration;
 using PlaywrightFramework.Evidence;
+using PlaywrightFramework.Fixtures;
+using Xunit.Sdk;
+using Xunit.v3;
+
+// Um fixture de ASSEMBLY: uma única instância para a execução inteira, compartilhada por todas as
+// classes de teste, mesmo que cada uma seja uma coleção diferente (e portanto rode em paralelo).
+// É o que permite manter "um browser por execução" sem serializar tudo numa coleção só.
+[assembly: AssemblyFixture(typeof(BrowserFixture))]
+
+// Coleções (= classes de teste) rodam em paralelo; os testes DENTRO de uma classe rodam em sequência.
+// É o padrão do xUnit, declarado aqui para a intenção ficar visível.
+[assembly: Parallelization(Mode = ParallelMode.Collections)]
 
 namespace PlaywrightFramework.Fixtures;
 
@@ -60,5 +72,11 @@ public class BrowserFixture : IAsyncLifetime
         }
 
         PlaywrightDriver?.Dispose();
+
+        // Uma vez, no fim: nenhum teste está rodando, então não há corrida com quem cria pastas.
+        if (Settings is not null)
+        {
+            FailureEvidence.DeleteEmptyFolders(Settings, RunId);
+        }
     }
 }

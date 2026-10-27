@@ -146,20 +146,40 @@ public class FailureEvidence
     }
 
     /// <summary>
-    /// Chamar no fim de cada teste. Remove a pasta do teste e as de cima (navegador, execução) que
-    /// ficaram VAZIAS, e para na raiz. Uma rodada sem nada para guardar não deixa casca nenhuma, e
-    /// uma pasta com trace ou screenshot dentro nunca é tocada.
-    /// Seguro hoje porque os testes rodam um de cada vez. Com paralelismo (fase Escala), conferir
-    /// "está vazia?" e apagar vira uma corrida: o Delete precisará tolerar IOException.
+    /// Chamar UMA vez, quando a suíte termina (BrowserFixture.DisposeAsync). Remove as pastas VAZIAS
+    /// da execução (do teste, do navegador e a da própria execução). Uma rodada sem nada para guardar
+    /// não deixa casca nenhuma, e uma pasta com trace ou screenshot dentro nunca é tocada.
+    ///
+    /// Por que no fim, e não ao fim de cada teste: com testes em paralelo, "a pasta está vazia?"
+    /// seguido de "apague" é uma corrida: outro teste pode criar uma subpasta, ou ter acabado de criar
+    /// a dele e ainda não ter escrito nada. No fim da suíte nenhum teste está rodando.
     /// </summary>
-    public void DeleteEmptyFolders()
+    public static void DeleteEmptyFolders(TestSettings settings, string runId)
     {
-        var directory = _directory;
-
-        while (directory != _root && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+        var runDirectory = Path.Combine(AppContext.BaseDirectory, settings.EvidenceDirectory, runId);
+        if (!Directory.Exists(runDirectory))
         {
-            Directory.Delete(directory);
-            directory = Path.GetDirectoryName(directory)!;
+            return;
+        }
+
+        try
+        {
+            // De baixo para cima: o mais fundo primeiro, para a pasta de cima já ficar vazia quando chegar a vez dela.
+            var folders = Directory.EnumerateDirectories(runDirectory, "*", SearchOption.AllDirectories)
+                .Append(runDirectory)
+                .OrderByDescending(folder => folder.Length);
+
+            foreach (var folder in folders)
+            {
+                if (!Directory.EnumerateFileSystemEntries(folder).Any())
+                {
+                    Directory.Delete(folder);
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // Manutenção, não veredito: uma pasta vazia que sobra é só casca, e a retenção a remove depois.
         }
     }
 
