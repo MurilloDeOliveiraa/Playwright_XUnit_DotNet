@@ -229,6 +229,11 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
+> **Mapa maior — `Roadmap - Principal SDET.md`** (`QA-SET\Projetos Pessoais\Carreira Principal SDET\`, etiqueta `carreiraSDET`): roadmap de carreira, montado a partir de uma vaga de Principal SDET. O objetivo é montar uma área de Qualidade do zero. **Este projeto é uma trilha dele**, citada por link, sem cópia.
+> - Prefixos: `C1`–`C39` são os tópicos de carreira; `WAF-N` são os tópicos deste projeto. Não confundir (ex.: `C8` é Docker, `WAF-8` é Component Objects).
+> - **`WAF-22` (pirâmide) e `WAF-7` (massa de dados) dependem do laboratório** (`C6` construir uma API em C#, `C7` sistema-laboratório com SQL Server). O framework não termina de uma vez.
+> - Ao fechar um tópico, atualizar **os dois** roadmaps (status e "Você está aqui").
+
 **PRÓXIMO PASSO → 20. CI/CD** (fase Escala; o 19, Paralelização, está fechado).
 A dor a mostrar: hoje só roda na máquina do aluno. O pipeline precisa do mesmo SDK/`global.json`, de **uma execução por navegador**, de publicar relatório e evidência com retenção própria, e de um **identificador de rodada vindo de fora** (o `RunId` é por processo). Dívidas ligadas: relatório que sobrevive à evidência, caminhos/usuário do Windows no relatório, sem histórico, `IBrowser` compartilhado ainda não confirmado (rodar muitas vezes, também sob estresse), rodada noturna com `Trace=Always`. **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
