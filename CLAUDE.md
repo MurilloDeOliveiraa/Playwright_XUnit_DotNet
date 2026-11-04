@@ -124,14 +124,23 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 
 ### Pipeline (CI/CD, tópico 20)
 - **GitHub Actions**: `.github/workflows/testes.yml`. Gatilhos: `push` na `main`, `pull_request` e `workflow_dispatch` (manual). Rodada agendada: **ainda não existe**.
-- **Uma execução por navegador**: matriz `[Chromium, Firefox]`, `fail-fast: false`, nomes **exatos** do `BrowserKind`. **Webkit não roda no `ubuntu-latest`** e está fora do pipeline (continua valendo local).
+- **Duas etapas** (tópico 21: smoke → regressão, ver "Tags e portão"). **Uma execução por navegador**: matriz `[Chromium, Firefox]`, `fail-fast: false`, nomes **exatos** do `BrowserKind`. **Webkit não roda no `ubuntu-latest`** e está fora do pipeline (continua valendo local).
 - SDK: instalar **.NET 8 e 10** (o 10 liga o modo novo do `dotnet test`; o 8 roda os testes). **Não fixar versão no `global.json`.**
 - Instalar só o navegador do job: `pwsh PlaywrightFramework/bin/Debug/net8.0/playwright.ps1 install --with-deps "${BROWSER,,}"` (minúsculas). O comando do `node.exe` do Windows **não** serve no Linux.
-- **A evidência só sobrevive se for publicada**: `upload-artifact` com `if: always()`, `if-no-files-found: ignore`, nome com o navegador (`resultado-<navegador>`), retenção 7 dias.
+- **A evidência só sobrevive se for publicada**: `upload-artifact` com `if: always()`, `if-no-files-found: ignore`, nome com job e navegador (`resultado-smoke-<navegador>`, `resultado-regressao-<navegador>`), retenção 7 dias.
 - **Repositório público ⇒ `SAUCEDEMO_Trace=Off` no CI e nenhum sistema real/segredo aqui.** O trace nunca sai da máquina.
 - Menor permissão: `permissions: contents: read`, `timeout-minutes`. `Headless` fica no padrão `true`.
 - Ações fixadas por versão (`@v4`), não por hash — dívida. `Headless=false` sem tela e `--no-build` no modo novo: **não verificados**.
 - Testar o pipeline com uma **falha forçada**: run verde não mostra se a evidência chega.
+
+### Tags e portão (smoke vs regression, tópico 21)
+- **Só o smoke é etiquetado.** Teste novo sem etiqueta cai na regressão sozinho. Smoke atual (**5**): `Login_ComCredenciaisValidas_LevaParaProdutos`, `Login_ComSenhaErrada_MostraMensagemDeErro`, `Login_ComUsuarioBloqueado_MostraMensagemDeBloqueio`, `AdicionarUmProduto_MostraBadgeComUm`, `Checkout_ComDadosValidos_ConcluiPedido`. Quem decide o que é smoke: o time (por ora, o aluno).
+- Dois jeitos equivalentes de marcar: `[Smoke]` (atributo próprio em `Tests/SmokeAttribute.cs`, **só em método**: na classe, todos os testes dela virariam smoke) e `[Trait(Tags.Category, Tags.Smoke)]`. **Os nomes moram em `Tests/Tags.cs`** — nunca texto solto (`"Smok"` compila e o teste some do smoke).
+- Filtro do workflow: `--filter-trait "Category=Smoke"` e `--filter-not-trait "Category=Smoke"`. Se mudar `Tags`, mude o yml. **Um filtro que não acha testes termina com código 8** (job falha); o `--minimum-expected-tests` foi tirado de propósito (o número teria de mudar a cada smoke novo) — um `[Smoke]` apagado por engano passa em silêncio.
+- **Portão:** job `smoke` (Chromium e Firefox) → job `regressao` com `needs: smoke` (os testes que **não** são smoke; só roda se **todo** o smoke passar). Se o smoke falhar, a regressão fica **skipped** (provado na run #7). Os outros smoke continuam rodando (o `dotnet test` não para no primeiro erro).
+- **Trocas conscientes:** mais lento quando tudo passa (cada job repete a preparação; 12 min 6 s na run verde); um teste de regressão quebrado fica escondido atrás de um smoke quebrado; smoke vermelho num navegador pula a regressão dos dois; dois `RunId` por run. O ganho aqui é de **aprendizado**, não de tempo.
+- Artefatos e relatórios com job e navegador no nome (`resultado-smoke-Chromium`, `relatorio-regressao-Firefox.html`). Se a `main` ganhar checks obrigatórios, exigir os **dois** jobs (um check skipped conta como aprovado).
+- **`[Smoke]` vem do nome da classe** (`SmokeAttribute`): o C# aceita o atributo sem o sufixo `Attribute`. O xUnit chama o `GetTraits()` ao descobrir os testes (por isso a classe implementa `ITraitAttribute`).
 
 ### Testes e asserções
 - **AAA**, um comportamento por teste, sem encanamento.
@@ -160,7 +169,7 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 ```
 WebAutomationFramework.sln
 global.json                       # modo novo do 'dotnet test' (xUnit v3 no SDK .NET 10) — obrigatório
-.github/workflows/testes.yml      # pipeline: Chromium + Firefox, evidência como artefato
+.github/workflows/testes.yml      # pipeline em 2 etapas: smoke (Chromium + Firefox) → regressão; evidência como artefato
 PlaywrightFramework/
   PlaywrightFramework.csproj      # net8.0, xUnit v3 (OutputType Exe) + Microsoft.Playwright
   appsettings.json                # endereço, headless, slow-mo, timeout, trace — sem segredo
@@ -190,6 +199,8 @@ PlaywrightFramework/
     User.cs · UsersFactory.cs     # Factory
     DeliveryInfo.cs · Order.cs · OrderBuilder.cs   # Builder
   Tests/
+    Tags.cs                       # nomes da etiqueta (Category, Smoke) num lugar só
+    SmokeAttribute.cs             # [Smoke] — só em método
     LoginTests.cs                 # login é o ALVO → usa LoginPage direto
     CartTests.cs                  # prova de isolamento; login é pré-condição → LoginFlow
     CheckoutTests.cs              # pedido ok / sem CEP / badge no checkout / dois produtos
@@ -232,8 +243,9 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 18 | Reporting | o relatório do xUnit vem de graça, mas não traz navegador nem anexo; `Navegador:` na saída de todo teste; saída de teste verde não aponta para o que não existe; não apagar o que o código não reconhece como seu |
 | 19 | Paralelização | fixture de assembly (um browser por execução, uma coleção por classe, coleções em paralelo); limpeza de pastas só no fim da suíte; ganho ~25%, piso = maior classe; "funciona" ≠ "garantido" (compartilhar `IBrowser` não confirmado na documentação) |
 | 20 | CI/CD | GitHub Actions; uma execução por navegador (matriz, Webkit fora); a evidência só sobrevive se for publicada; repositório público ⇒ sem trace; testar com falha forçada |
+| 21 | Tags smoke vs regression | só o smoke é etiquetado; nomes da etiqueta em `Tags` (nunca texto solto); filtro vazio falha (código 8); portão `needs: smoke` poupa tempo na falha e custa tempo no caso feliz; provar o portão com falha forçada |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -247,8 +259,8 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > - **`WAF-22` (pirâmide) e `WAF-7` (massa de dados) dependem do laboratório** (`C6` construir uma API em C#, `C7` sistema-laboratório com SQL Server). O framework não termina de uma vez.
 > - Ao fechar um tópico, atualizar **os dois** roadmaps (status e "Você está aqui").
 
-**PRÓXIMO PASSO → 21. Tags: smoke vs regression** (fase Escala; o 20, CI/CD, está fechado).
-A dor a mostrar: o pipeline roda os 9 testes a cada mudança, e não há como pedir "só o essencial" (rápido, a cada `push`) separado do "tudo" (completo, à noite). Hoje nenhum teste tem etiqueta. Pontos para o aluno decidir: o que é "smoke"? quem decide? como o pipeline escolhe? **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+**PRÓXIMO PASSO → 23. Anti-patterns** (fase Qualidade; o 21, Tags smoke vs regression, está fechado; o 22, pirâmide API vs UI, **espera uma API** — o SauceDemo não tem — e entra depois do laboratório do roadmap de carreira).
+A dor a mostrar: o framework tem regras escritas no `CLAUDE.md` (ex.: sem `Helpers/`, POM sem estado), mas nada confere se o código as segue; e há coisas "erradas de propósito" na tabela de dívidas. Pontos para o aluno decidir: o que é um anti-pattern **neste** framework (e não em livro)? o que já apareceu e foi consertado? o que ainda está no código e ninguém vê? **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
@@ -257,7 +269,7 @@ A dor a mostrar: o pipeline roda os 9 testes a cada mudança, e não há como pe
 - `GetByTestId` / `SetTestIdAttribute` — gatilho na seção Testes e asserções;
 - logs de passos — gatilho: falha que screenshot, vídeo e trace não expliquem.
 
-**A fazer:** Escala (tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Escala (pirâmide de testes — espera uma API) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 
