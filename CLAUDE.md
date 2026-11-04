@@ -122,6 +122,17 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 - **Dois limites, dois lugares:** `Timeout` (30 s) é o `SetDefaultTimeout` do **context** e vale para **ações**, no `BaseTest`; `ExpectTimeout` (5 s) é o `Assertions.SetDefaultExpectTimeout`, **estático**, definido **uma vez** no `BrowserFixture`. Uma verificação só: `new() { Timeout = ... }` na chamada.
 - **Todas as settings estão no `appsettings.json`**, com os mesmos valores padrão de `TestSettings` (decisão do aluno: o arquivo documenta os ajustes). **O arquivo ganha do código**, então mudar só o código não tem efeito. Setting nova entra nos dois lugares.
 
+### Pipeline (CI/CD, tópico 20)
+- **GitHub Actions**: `.github/workflows/testes.yml`. Gatilhos: `push` na `main`, `pull_request` e `workflow_dispatch` (manual). Rodada agendada: **ainda não existe**.
+- **Uma execução por navegador**: matriz `[Chromium, Firefox]`, `fail-fast: false`, nomes **exatos** do `BrowserKind`. **Webkit não roda no `ubuntu-latest`** e está fora do pipeline (continua valendo local).
+- SDK: instalar **.NET 8 e 10** (o 10 liga o modo novo do `dotnet test`; o 8 roda os testes). **Não fixar versão no `global.json`.**
+- Instalar só o navegador do job: `pwsh PlaywrightFramework/bin/Debug/net8.0/playwright.ps1 install --with-deps "${BROWSER,,}"` (minúsculas). O comando do `node.exe` do Windows **não** serve no Linux.
+- **A evidência só sobrevive se for publicada**: `upload-artifact` com `if: always()`, `if-no-files-found: ignore`, nome com o navegador (`resultado-<navegador>`), retenção 7 dias.
+- **Repositório público ⇒ `SAUCEDEMO_Trace=Off` no CI e nenhum sistema real/segredo aqui.** O trace nunca sai da máquina.
+- Menor permissão: `permissions: contents: read`, `timeout-minutes`. `Headless` fica no padrão `true`.
+- Ações fixadas por versão (`@v4`), não por hash — dívida. `Headless=false` sem tela e `--no-build` no modo novo: **não verificados**.
+- Testar o pipeline com uma **falha forçada**: run verde não mostra se a evidência chega.
+
 ### Testes e asserções
 - **AAA**, um comportamento por teste, sem encanamento.
 - **Escada de seletores:** `data-test` > papel + nome acessível (`GetByRole`) > texto/label > CSS (último recurso).
@@ -149,6 +160,7 @@ Component   → pedaço de UI ancorado   usa um locator raiz
 ```
 WebAutomationFramework.sln
 global.json                       # modo novo do 'dotnet test' (xUnit v3 no SDK .NET 10) — obrigatório
+.github/workflows/testes.yml      # pipeline: Chromium + Firefox, evidência como artefato
 PlaywrightFramework/
   PlaywrightFramework.csproj      # net8.0, xUnit v3 (OutputType Exe) + Microsoft.Playwright
   appsettings.json                # endereço, headless, slow-mo, timeout, trace — sem segredo
@@ -219,8 +231,9 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 | 17 | Trace Viewer | screenshot/vídeo são fotos do resultado, o trace é o processo; `TraceMode` de lista fechada (sem repetição de teste, não há "2ª tentativa"); vídeo virou opção; custo medido ~5% |
 | 18 | Reporting | o relatório do xUnit vem de graça, mas não traz navegador nem anexo; `Navegador:` na saída de todo teste; saída de teste verde não aponta para o que não existe; não apagar o que o código não reconhece como seu |
 | 19 | Paralelização | fixture de assembly (um browser por execução, uma coleção por classe, coleções em paralelo); limpeza de pastas só no fim da suíte; ganho ~25%, piso = maior classe; "funciona" ≠ "garantido" (compartilhar `IBrowser` não confirmado na documentação) |
+| 20 | CI/CD | GitHub Actions; uma execução por navegador (matriz, Webkit fora); a evidência só sobrevive se for publicada; repositório público ⇒ sem trace; testar com falha forçada |
 
-**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
+**Ordem real percorrida:** 1 → 2 → 3 → 4 → 5 → 6 → 10 → 8 → 9 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20. A ordem muda de propósito, sempre atrás da dor que está doendo no código.
 
 ---
 
@@ -229,8 +242,13 @@ O número é **identificador** (casa com o nome da nota no vault), não ordem de
 > O roadmap **oficial** vive no vault do Obsidian, não aqui. Não criar `ROADMAP.md` no repositório.
 > `Roadmap - Web Automation Framework.md` — diagrama Mermaid, tabela de ordem de execução, "Você está aqui" e a tabela de **dívidas conscientes** (coisas erradas de propósito, cada uma ligada à fase que a resolve).
 
-**PRÓXIMO PASSO → 20. CI/CD** (fase Escala; o 19, Paralelização, está fechado).
-A dor a mostrar: hoje só roda na máquina do aluno. O pipeline precisa do mesmo SDK/`global.json`, de **uma execução por navegador**, de publicar relatório e evidência com retenção própria, e de um **identificador de rodada vindo de fora** (o `RunId` é por processo). Dívidas ligadas: relatório que sobrevive à evidência, caminhos/usuário do Windows no relatório, sem histórico, `IBrowser` compartilhado ainda não confirmado (rodar muitas vezes, também sob estresse), rodada noturna com `Trace=Always`. **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
+> **Mapa maior — `Roadmap - Principal SDET.md`** (`QA-SET\Projetos Pessoais\Carreira Principal SDET\`, etiqueta `carreiraSDET`): roadmap de carreira, montado a partir de uma vaga de Principal SDET. O objetivo é montar uma área de Qualidade do zero. **Este projeto é uma trilha dele**, citada por link, sem cópia.
+> - Prefixos: `C1`–`C39` são os tópicos de carreira; `WAF-N` são os tópicos deste projeto. Não confundir (ex.: `C8` é Docker, `WAF-8` é Component Objects).
+> - **`WAF-22` (pirâmide) e `WAF-7` (massa de dados) dependem do laboratório** (`C6` construir uma API em C#, `C7` sistema-laboratório com SQL Server). O framework não termina de uma vez.
+> - Ao fechar um tópico, atualizar **os dois** roadmaps (status e "Você está aqui").
+
+**PRÓXIMO PASSO → 21. Tags: smoke vs regression** (fase Escala; o 20, CI/CD, está fechado).
+A dor a mostrar: o pipeline roda os 9 testes a cada mudança, e não há como pedir "só o essencial" (rápido, a cada `push`) separado do "tudo" (completo, à noite). Hoje nenhum teste tem etiqueta. Pontos para o aluno decidir: o que é "smoke"? quem decide? como o pipeline escolhe? **Regra do aluno:** antes de propor solução, validar com o sub-agente `questionador` e mostrar as perguntas e respostas; e fazer o aluno **ler o código**, apontando o que procurar. Lembrar: mostrar a dor, parar, esperar as dúvidas, e só então perguntar se pode implementar.
 
 **Adiados** (SauceDemo não tem o que o tópico precisa; retomar quando houver):
 - tópico 7, Gestão de massa de dados — precisa de banco ou API para preparar e limpar dados;
@@ -239,7 +257,7 @@ A dor a mostrar: hoje só roda na máquina do aluno. O pipeline precisa do mesmo
 - `GetByTestId` / `SetTestIdAttribute` — gatilho na seção Testes e asserções;
 - logs de passos — gatilho: falha que screenshot, vídeo e trace não expliquem.
 
-**A fazer:** Escala (CI/CD, tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
+**A fazer:** Escala (tags smoke/regression, pirâmide de testes) · Qualidade do framework (anti-patterns, boas práticas).
 
 ---
 

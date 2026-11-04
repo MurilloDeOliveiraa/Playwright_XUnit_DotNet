@@ -1,0 +1,68 @@
+name: Testes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:   # permite rodar manualmente pela aba Actions
+
+# Se chegar uma mudança nova no mesmo branch, cancela a run antiga que ainda está rodando.
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+# Menor permissão possível: só ler o código. Nada de escrever no repositório.
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    name: Testes (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false          # um navegador falhando não cancela os outros dois
+      matrix:
+        browser: [Chromium, Firefox]   # exatamente os nomes do BrowserKind, sem o WebKit pois ele não roda com o ubuntu-latest
+
+    env:
+      SAUCEDEMO_Browser: ${{ matrix.browser }}
+      SAUCEDEMO_Trace: Off      # o trace não sai da máquina (repositório público)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O 10 liga o modo novo do 'dotnet test' (global.json); o 8 roda os testes (net8.0).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Compilar
+        run: dotnet build
+
+      - name: Instalar o navegador deste job
+        run: pwsh PlaywrightFramework/bin/Debug/net8.0/playwright.ps1 install --with-deps "${BROWSER,,}"
+        env:
+          BROWSER: ${{ matrix.browser }}
+
+      - name: Rodar os testes
+        run: >
+          dotnet test
+          --results-directory TestResults
+          --report-xunit-html
+          --report-xunit-html-filename relatorio-${{ matrix.browser }}.html
+
+      # 'always()': sobe a evidência mesmo quando os testes falham, que é quando ela importa.
+      - name: Guardar relatório e evidência na run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-${{ matrix.browser }}
+          path: |
+            TestResults/
+            PlaywrightFramework/bin/Debug/net8.0/test-results/
+          if-no-files-found: ignore   # run verde não tem pasta de evidência
+          retention-days: 7
