@@ -15,14 +15,20 @@ concurrency:
 permissions:
   contents: read
 
+# Duas etapas, em ordem: o smoke (testes críticos, marcados com [Smoke]) vem primeiro; o resto só
+# roda se TODAS as execuções do smoke passarem. Se o smoke falhar, a regressão aparece como "skipped".
+# Os outros testes smoke continuam rodando mesmo que um falhe (o dotnet test não para no primeiro erro).
+#
+# Os números de --minimum-expected-tests (4 e 5) acompanham a lista de testes: ao criar ou marcar um
+# teste, atualize o número junto. Eles existem para o filtro que acha ZERO testes falhar, em vez de passar em verde.
 jobs:
-  testes:
-    name: Testes (${{ matrix.browser }})
+  smoke:
+    name: Smoke (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
-      fail-fast: false          # um navegador falhando não cancela os outros dois
+      fail-fast: false          # um navegador falhando não cancela o outro
       matrix:
         browser: [Chromium, Firefox]   # exatamente os nomes do BrowserKind, sem o WebKit pois ele não roda com o ubuntu-latest
 
@@ -48,21 +54,73 @@ jobs:
         env:
           BROWSER: ${{ matrix.browser }}
 
-      - name: Rodar os testes
+      - name: Rodar os testes smoke
         run: >
           dotnet test
+          --filter-trait "Category=Smoke"
           --results-directory TestResults
           --report-xunit-html
-          --report-xunit-html-filename relatorio-${{ matrix.browser }}.html
+          --report-xunit-html-filename relatorio-smoke-${{ matrix.browser }}.html
 
       # 'always()': sobe a evidência mesmo quando os testes falham, que é quando ela importa.
       - name: Guardar relatório e evidência na run
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: resultado-${{ matrix.browser }}
+          name: resultado-smoke-${{ matrix.browser }}
           path: |
             TestResults/
             PlaywrightFramework/bin/Debug/net8.0/test-results/
           if-no-files-found: ignore   # run verde não tem pasta de evidência
+          retention-days: 7
+
+  regressao:
+    name: Regressão (${{ matrix.browser }})
+    needs: smoke                # só roda se TODAS as execuções do smoke passarem
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [Chromium, Firefox]
+
+    env:
+      SAUCEDEMO_Browser: ${{ matrix.browser }}
+      SAUCEDEMO_Trace: Off
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Compilar
+        run: dotnet build
+
+      - name: Instalar o navegador deste job
+        run: pwsh PlaywrightFramework/bin/Debug/net8.0/playwright.ps1 install --with-deps "${BROWSER,,}"
+        env:
+          BROWSER: ${{ matrix.browser }}
+
+      - name: Rodar os testes que não são smoke
+        run: >
+          dotnet test
+          --filter-not-trait "Category=Smoke"
+          --results-directory TestResults
+          --report-xunit-html
+          --report-xunit-html-filename relatorio-regressao-${{ matrix.browser }}.html
+
+      - name: Guardar relatório e evidência na run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultado-regressao-${{ matrix.browser }}
+          path: |
+            TestResults/
+            PlaywrightFramework/bin/Debug/net8.0/test-results/
+          if-no-files-found: ignore
           retention-days: 7

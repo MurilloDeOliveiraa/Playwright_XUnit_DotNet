@@ -16,6 +16,7 @@ public class CartTests(BrowserFixture browserFixture, ITestOutputHelper testOutp
     : BaseTest(browserFixture, testOutputHelper)
 {
     [Fact]
+    [Smoke]
     public async Task AdicionarUmProduto_MostraBadgeComUm()
     {
         // Arrange — aqui o login é PRÉ-CONDIÇÃO, não o alvo: usa o fluxo.

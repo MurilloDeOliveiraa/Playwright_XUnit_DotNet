@@ -9,6 +9,7 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
     : BaseTest(browserFixture, testOutputHelper)
 {
     [Fact]
+    [Smoke]
     public async Task Login_ComCredenciaisValidas_LevaParaProdutos()
     {
         // Arrange
@@ -22,6 +23,7 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
     }
 
     [Fact]
+    [Smoke]
     public async Task Login_ComSenhaErrada_MostraMensagemDeErro()
     {
         // Arrange
@@ -36,6 +38,7 @@ public class LoginTests(BrowserFixture browserFixture, ITestOutputHelper testOut
     }
 
     [Fact]
+    [Trait(Tags.Category, Tags.Smoke)]
     public async Task Login_ComUsuarioBloqueado_MostraMensagemDeBloqueio()
     {
         // Arrange

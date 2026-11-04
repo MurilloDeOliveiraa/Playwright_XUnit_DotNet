@@ -10,6 +10,7 @@ public class CheckoutTests(BrowserFixture browserFixture, ITestOutputHelper test
     : BaseTest(browserFixture, testOutputHelper)
 {
     [Fact]
+    [Smoke]
     public async Task Checkout_ComDadosValidos_ConcluiPedido()
     {
         // Arrange
