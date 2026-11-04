@@ -12,7 +12,7 @@ namespace PlaywrightFramework.Configuration;
 public record TestSettings
 {
     /// <summary>Endereço do site sob teste.</summary>
-    public string BaseUrl { get; init; } = "https://www.saucedemo.com";
+    public string BaseUrl { get; init; } = "https://www.example.com";
 
     /// <summary>
     /// Qual navegador usar. O padrão (Chromium) vale para quando NINGUÉM informou nada.
