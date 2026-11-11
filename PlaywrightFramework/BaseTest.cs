@@ -60,27 +60,13 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
             BaseURL = browserFixture.Settings.BaseUrl,
 
             // Sem vídeo ligado, nem grava (nem cria pasta): null desliga a gravação.
-            RecordVideoDir = browserFixture.Settings.RecordVideo ? _evidence.EnsureDirectory() : null
+            RecordVideoDir = _evidence.VideoDirectory()
         });
-        
+
         _context.SetDefaultTimeout(browserFixture.Settings.Timeout);
-        
-        // Cria a pasta se o Trace for diferente de OFF
-        if (!browserFixture.Settings.RecordVideo && browserFixture.Settings.Trace != TraceMode.Off)
-        {
-            _evidence.EnsureDirectory();
-        }
 
         // O trace começa logo depois do context, para pegar a criação da página também.
-        if (browserFixture.Settings.Trace != TraceMode.Off)
-        {
-            await _context.Tracing.StartAsync(new TracingStartOptions
-            {
-                Screenshots = true, // uma imagem a cada passo
-                Snapshots = true,   // a cópia navegável da página em cada passo
-                Sources = true      // a linha do teste que fez cada passo
-            });
-        }
+        await _evidence.StartTraceAsync(_context);
 
         Page = await _context.NewPageAsync();
 
@@ -113,36 +99,33 @@ public abstract class BaseTest(BrowserFixture browserFixture, ITestOutputHelper 
         // O xUnit v3 entrega o resultado do teste aqui. (Na v2 isso não existia, e foi o motivo da migração.)
         var testFailed = TestContext.Current.TestState!.Result == TestResult.Failed;
 
-        // O screenshot tem que vir ANTES de fechar o context: depois não há mais tela para fotografar.
-        if (testFailed)
+        try
         {
-            var screenshot = await _evidence.TryTakeScreenshotAsync(Page);
-            TestOutputHelper.WriteLine($"Screenshot da falha: {screenshot ?? "não foi possível tirar"}");
-        }
+            // O screenshot tem que vir ANTES de fechar o context: depois não há mais tela para fotografar.
+            if (testFailed)
+            {
+                var screenshot = await _evidence.TryTakeScreenshotAsync(Page);
+                TestOutputHelper.WriteLine($"Screenshot da falha: {screenshot ?? "não foi possível tirar"}");
+            }
 
-        // O trace PARA antes de fechar o context (depois, não há mais o que gravar). Guarda se o teste
-        // falhou, ou se pediram para guardar sempre.
-        if (browserFixture.Settings.Trace != TraceMode.Off)
-        {
-            var keepTrace = testFailed || browserFixture.Settings.Trace == TraceMode.Always;
-            var trace = await _evidence.StopTraceAsync(_context, keepTrace);
+            // O trace PARA antes de fechar o context (depois, não há mais o que gravar).
+            var trace = await _evidence.StopTraceAsync(_context, testFailed);
             if (trace is not null)
             {
                 TestOutputHelper.WriteLine($"Trace: {trace}");
             }
         }
-
-        // Fechar o context descarta o estado inteiro do teste (nada vaza para o próximo)
-        // e termina de gravar o vídeo.
-        await _context.CloseAsync();
-
-        if (browserFixture.Settings.RecordVideo)
+        finally
         {
-            var video = await _evidence.FinishVideoAsync(Page, testFailed);
-            if (video is not null)
-            {
-                TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
-            }
+            // Fechar o context descarta o estado inteiro do teste (nada vaza para o próximo) e termina de
+            // gravar o vídeo. É o ponto sem volta, por isso fica à vista aqui e roda mesmo se o trace falhar.
+            await _context.CloseAsync();
+        }
+
+        var video = await _evidence.FinishVideoAsync(Page, testFailed);
+        if (video is not null)
+        {
+            TestOutputHelper.WriteLine($"Vídeo da falha: {video}");
         }
     }
 }

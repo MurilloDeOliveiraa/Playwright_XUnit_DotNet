@@ -13,7 +13,9 @@ namespace PlaywrightFramework.Evidence;
 ///   - a execução (data e hora) separa uma rodada da outra: um teste que passa NUNCA apaga a
 ///     evidência de uma falha anterior, e as falhas da mesma rodada ficam juntas;
 ///   - o navegador no caminho responde "falhou em qual navegador?" sem precisar abrir nada;
-///   - a pasta do teste só nasce quando há o que guardar.
+///   - a pasta do teste só nasce quando há o que guardar (screenshot ou trace salvos). A exceção é o
+///     vídeo: com RecordVideo ligado ela nasce antes do teste, porque o Playwright precisa do caminho
+///     desde o começo; num teste que passa o vídeo é apagado e a pasta fica vazia até a limpeza do fim.
 ///
 /// O screenshot é tirado NA HORA da falha. Trace e vídeo não podem ser: não dá para gravar o que já
 /// passou. Por isso são gravados durante o teste e descartados no fim, quando não for para guardar.
@@ -25,11 +27,14 @@ public class FailureEvidence
     /// <summary>Formato do nome da pasta de cada execução. Serve para criar o nome e para ler a idade dele.</summary>
     public const string RunIdFormat = "yyyyMMdd-HHmmss";
 
+    private readonly TestSettings _settings;
     private readonly string _root;
     private readonly string _directory;
 
     public FailureEvidence(TestSettings settings, string runId, string testName)
     {
+        _settings = settings;
+
         // Caminho relativo vale a partir da pasta onde os testes rodam (AppContext.BaseDirectory).
         _root = Path.Combine(AppContext.BaseDirectory, settings.EvidenceDirectory);
         _directory = Path.Combine(_root, runId, settings.Browser.ToString(), SafeFileName(testName));
@@ -82,14 +87,40 @@ public class FailureEvidence
     }
 
     /// <summary>
-    /// Cria a pasta do teste, se ainda não existir, e devolve o caminho. Só é chamada quando há o que
-    /// guardar (screenshot, trace ou vídeo). Nunca apaga nada: pasta que já existe é evidência de outro teste.
+    /// Cria a pasta do teste, se ainda não existir, e devolve o caminho. É chamada por quem vai gravar
+    /// (screenshot e trace salvos) e, com vídeo ligado, pelo BaseTest antes do teste. Nunca apaga nada:
+    /// pasta que já existe é evidência de outro teste.
     /// </summary>
     public string EnsureDirectory()
     {
         if (!Directory.Exists(_directory))
             Directory.CreateDirectory(_directory);
         return _directory;
+    }
+
+    /// <summary>
+    /// A pasta onde o Playwright grava o vídeo, ou null se o vídeo está desligado (null desliga a gravação).
+    /// Vai nas opções de criação do context, ou seja, ANTES de o context existir, por isso é separada do trace.
+    /// </summary>
+    public string? VideoDirectory() => _settings.RecordVideo ? EnsureDirectory() : null;
+
+    /// <summary>
+    /// Liga o trace, se a configuração pede. Chamar logo depois de criar o context, para pegar a criação
+    /// da página também. Não faz nada com Trace desligado.
+    /// </summary>
+    public async Task StartTraceAsync(IBrowserContext context)
+    {
+        if (_settings.Trace == TraceMode.Off)
+        {
+            return;
+        }
+
+        await context.Tracing.StartAsync(new TracingStartOptions
+        {
+            Screenshots = true, // uma imagem a cada passo
+            Snapshots = true,   // a cópia navegável da página em cada passo
+            Sources = true      // a linha do teste que fez cada passo
+        });
     }
 
     /// <summary>
@@ -113,10 +144,22 @@ public class FailureEvidence
 
     /// <summary>
     /// Para o trace. Chamar ANTES de fechar o context: depois dele não há mais o que gravar.
-    /// Parar SEM caminho descarta a gravação; com caminho, salva o .zip. Devolve o caminho, ou null se descartou.
+    /// Guarda se o teste falhou, ou se pediram para guardar sempre (Trace = Always); senão descarta.
+    /// Parar SEM caminho descarta a gravação; com caminho, salva o .zip. Devolve o caminho, ou null se
+    /// descartou (ou se o Trace está desligado).
+    ///
+    /// Diferente do screenshot, o erro daqui SOBE de propósito: um trace que não deu para guardar ou
+    /// descartar é um defeito da própria evidência, e deve aparecer. Quem chama garante o fechamento
+    /// do context com try/finally.
     /// </summary>
-    public async Task<string?> StopTraceAsync(IBrowserContext context, bool keep)
+    public async Task<string?> StopTraceAsync(IBrowserContext context, bool testFailed)
     {
+        if (_settings.Trace == TraceMode.Off)
+        {
+            return null;
+        }
+
+        var keep = testFailed || _settings.Trace == TraceMode.Always;
         if (!keep)
         {
             await context.Tracing.StopAsync();
@@ -129,11 +172,16 @@ public class FailureEvidence
     }
 
     /// <summary>
-    /// Só chamar com RecordVideo ligado, e DEPOIS de fechar o context: é nesse momento que o vídeo
-    /// termina de ser gravado. Apaga o arquivo se o teste passou; devolve o caminho se ficou.
+    /// Chamar DEPOIS de fechar o context: é nesse momento que o vídeo termina de ser gravado. Apaga o
+    /// arquivo se o teste passou; devolve o caminho se ficou (ou null, também com o vídeo desligado).
     /// </summary>
     public async Task<string?> FinishVideoAsync(IPage page, bool testFailed)
     {
+        if (!_settings.RecordVideo)
+        {
+            return null;
+        }
+
         var video = page.Video ?? throw new InvalidOperationException("O vídeo não foi ligado no context.");
 
         if (!testFailed)
@@ -162,24 +210,42 @@ public class FailureEvidence
             return;
         }
 
+        // Manutenção, não veredito: uma pasta vazia que sobra é só casca, e a retenção a remove depois.
+        // Por isso nenhum erro daqui pode subir (iria quebrar o DisposeAsync do fixture e esconder o
+        // erro verdadeiro), e cada pasta tem o próprio try: uma pasta travada não impede as outras.
+        List<string> folders;
         try
         {
             // De baixo para cima: o mais fundo primeiro, para a pasta de cima já ficar vazia quando chegar a vez dela.
-            var folders = Directory.EnumerateDirectories(runDirectory, "*", SearchOption.AllDirectories)
+            folders = Directory.EnumerateDirectories(runDirectory, "*", SearchOption.AllDirectories)
                 .Append(runDirectory)
-                .OrderByDescending(folder => folder.Length);
+                .OrderByDescending(folder => folder.Length)
+                .ToList();
+        }
+        catch (IOException)
+        {
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
 
-            foreach (var folder in folders)
+        foreach (var folder in folders)
+        {
+            try
             {
                 if (!Directory.EnumerateFileSystemEntries(folder).Any())
                 {
                     Directory.Delete(folder);
                 }
             }
-        }
-        catch (IOException)
-        {
-            // Manutenção, não veredito: uma pasta vazia que sobra é só casca, e a retenção a remove depois.
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 
